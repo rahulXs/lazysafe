@@ -25,4 +25,5 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync
+      - run: uv run pytest -q
       - run: uv run ruff check .

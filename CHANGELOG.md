@@ -4,13 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [unreleased]
+## [0.1.0] - 2026-09-06
 
 ### added
 
-- project scaffold with CLI stub
-- static analysis engine (SE01-SE08) specification
-- dynamic probing protocol
-- verification protocol
-- measurement harness with budget gating
-- JSON report output with versioned schemas
+- `lazysafe analyze` static analysis engine with SE01-SE08 side-effect rules
+- classification decision tree (SAFE / RISKY / UNSAFE / UNKNOWN)
+- JSON report output (`--save`, `--json` flags)
+- `lazysafe version` command with capability matrix
+- configuration via `lazysafe.toml` with unknown-key rejection
+- fixture corpus for side-effect rule testing
+
+### side-effect rules
+
+- SE01: module-level call expressions
+- SE02: foreign attribute assignment (monkeypatching)
+- SE03: sys.path / sys.modules / os.environ mutation
+- SE04: atexit / signal / logging registration
+- SE05: module-level file I/O
+- SE06: framework registration decorators
+- SE07: importlib.import_module with computed names
+- SE08: try/except ImportError with fallback patches
