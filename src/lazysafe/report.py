@@ -2,7 +2,7 @@
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lazysafe._version import __version__
@@ -33,11 +33,14 @@ def write_analysis_report(
         "schema_version": 1,
         "tool": {"name": "lazysafe", "version": __version__},
         "run": {
-            "timestamp_utc": datetime.now(timezone.utc).strftime(
+            "timestamp_utc": datetime.now(UTC).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"
             ),
             "duration_ms": round(duration_ms, 1),
-            "host_python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "host_python": (
+                f"{sys.version_info.major}.{sys.version_info.minor}"
+                f".{sys.version_info.micro}"
+            ),
             "targets": targets,
             "entries": [],
         },

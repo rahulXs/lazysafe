@@ -1,10 +1,8 @@
 """clean package with no side effects."""
 
 import json
-import os
-from pathlib import Path
 
-__all__ = ["load_config", "get_data"]
+__all__ = ["get_data", "load_config"]
 
 
 def load_config(path: str) -> dict:

@@ -40,6 +40,43 @@ def _refresh_third_party() -> None:
         _THIRD_PARTY_TOP_LEVELS = set()
 
 
+def _make_import(
+    module: str, names: list[str], lineno: int, is_try_except: bool = False
+) -> ImportStmt:
+    """create an ImportStmt."""
+    return ImportStmt(
+        module=module,
+        names=names,
+        lineno=lineno,
+        is_try_except=is_try_except,
+    )
+
+
+def _extract_imports_from_handler(handler: ast.ExceptHandler) -> list[ImportStmt]:
+    """extract imports from a try/except ImportError handler."""
+    imports: list[ImportStmt] = []
+
+    for stmt in ast.iter_child_nodes(handler):
+        if isinstance(stmt, ast.Import):
+            for alias in stmt.names:
+                imports.append(
+                    _make_import(
+                        alias.name,
+                        [alias.asname or alias.name],
+                        stmt.lineno,
+                        is_try_except=True,
+                    )
+                )
+        elif isinstance(stmt, ast.ImportFrom):
+            mod = stmt.module or ""
+            names = [a.name for a in stmt.names]
+            imports.append(
+                _make_import(mod, names, stmt.lineno, is_try_except=True)
+            )
+
+    return imports
+
+
 def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
     """extract top-level import statements from an AST."""
     imports: list[ImportStmt] = []
@@ -48,50 +85,21 @@ def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 imports.append(
-                    ImportStmt(
-                        module=alias.name,
-                        names=[alias.asname or alias.name],
-                        lineno=node.lineno,
-                    )
+                    _make_import(alias.name, [alias.asname or alias.name], node.lineno)
                 )
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             names = [alias.name for alias in node.names]
-            imports.append(
-                ImportStmt(
-                    module=module,
-                    names=names,
-                    lineno=node.lineno,
-                )
-            )
+            imports.append(_make_import(module, names, node.lineno))
         elif isinstance(node, ast.Try):
             for handler in node.handlers:
-                if handler.type is not None and isinstance(
-                    handler.type, ast.Name
-                ):
-                    if handler.type.id == "ImportError":
-                        for stmt in ast.iter_child_nodes(handler):
-                            if isinstance(stmt, ast.Import):
-                                for alias in stmt.names:
-                                    imports.append(
-                                        ImportStmt(
-                                            module=alias.name,
-                                            names=[alias.asname or alias.name],
-                                            lineno=stmt.lineno,
-                                            is_try_except=True,
-                                        )
-                                    )
-                            elif isinstance(stmt, ast.ImportFrom):
-                                mod = stmt.module or ""
-                                names = [a.name for a in stmt.names]
-                                imports.append(
-                                    ImportStmt(
-                                        module=mod,
-                                        names=names,
-                                        lineno=stmt.lineno,
-                                        is_try_except=True,
-                                    )
-                                )
+                is_import_error = (
+                    handler.type is not None
+                    and isinstance(handler.type, ast.Name)
+                    and handler.type.id == "ImportError"
+                )
+                if is_import_error:
+                    imports.extend(_extract_imports_from_handler(handler))
 
     return imports
 

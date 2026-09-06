@@ -7,7 +7,6 @@ from lazysafe.model import Classification, Origin
 from lazysafe.static import run_static
 from lazysafe.static.classify import classify_all
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 

@@ -2,4 +2,4 @@
 
 import sys
 
-sys.path = ["/opt/extras"] + sys.path
+sys.path = ["/opt/extras", *sys.path]
