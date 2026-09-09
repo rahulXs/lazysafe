@@ -10,12 +10,10 @@ _PATH_READ_ATTRS = frozenset({"read_text", "read_bytes"})
 
 
 def _is_pure_builtin_call(node: ast.Call) -> bool:
-    """check if a call is to a known-pure builtin."""
     return isinstance(node.func, ast.Name) and node.func.id in _PURE_BUILTINS
 
 
 def _is_importlib_import(node: ast.expr) -> bool:
-    """check if a call is importlib.import_module."""
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -28,7 +26,6 @@ def _is_importlib_import(node: ast.expr) -> bool:
 def _make_finding(
     rule: str, lineno: int, evidence: str, confidence: float
 ) -> SEFinding:
-    """create a finding."""
     return SEFinding(
         rule=rule,
         lineno=lineno,
@@ -38,8 +35,7 @@ def _make_finding(
 
 
 def _check_se01(tree: ast.Module) -> list[SEFinding]:
-    """SE01: module-level call expressions."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         is_call = isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
@@ -52,8 +48,7 @@ def _check_se01(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se02(tree: ast.Module) -> list[SEFinding]:
-    """SE02: foreign attribute assignment (monkeypatch detection)."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         if not isinstance(node, ast.Assign):
@@ -71,8 +66,7 @@ def _check_se02(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se03(tree: ast.Module) -> list[SEFinding]:
-    """SE03: import-system / interpreter mutation."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         if not isinstance(node, ast.Assign):
@@ -103,8 +97,7 @@ def _check_se03(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se04(tree: ast.Module) -> list[SEFinding]:
-    """SE04: process-global registrations."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         is_call = isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
@@ -135,8 +128,7 @@ def _check_se04(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se05(tree: ast.Module) -> list[SEFinding]:
-    """SE05: module-level I/O."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
@@ -167,8 +159,7 @@ def _check_se05(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se06(tree: ast.Module) -> list[SEFinding]:
-    """SE06: framework registration decorators."""
-    findings: list[SEFinding] = []
+    findings = []
     count = 0
 
     for node in ast.iter_child_nodes(tree):
@@ -192,8 +183,7 @@ def _check_se06(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se07(tree: ast.Module) -> list[SEFinding]:
-    """SE07: entry-point / plugin scanning."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         has_call = (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)) or (
@@ -210,8 +200,7 @@ def _check_se07(tree: ast.Module) -> list[SEFinding]:
 
 
 def _check_se08(tree: ast.Module) -> list[SEFinding]:
-    """SE08: conditional-but-unconditional-in-practice imports."""
-    findings: list[SEFinding] = []
+    findings = []
 
     for node in ast.iter_child_nodes(tree):
         if not isinstance(node, ast.Try):
@@ -249,7 +238,7 @@ def run_static(node: ModuleNode, source: str) -> list[SEFinding]:
     except SyntaxError:
         return []
 
-    findings: list[SEFinding] = []
+    findings = []
     findings.extend(_check_se01(tree))
     findings.extend(_check_se02(tree))
     findings.extend(_check_se03(tree))

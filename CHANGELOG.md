@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.0] - 2026-09-09
+
+### added
+
+- `lazysafe measure` startup timing harness using `-X importtime`
+- fresh-process timing with warmup runs
+- p50/min/max/stdev statistics
+- `--budget MS` flag for CI gating (exit 1 if exceeded)
+- `--python EXE` flag for interpreter selection
+- JSON report output (`--json` flag)
+- per-module timing breakdown (top offenders)
+
 ## [0.1.0] - 2026-09-06
 
 ### added

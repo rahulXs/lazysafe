@@ -4,7 +4,6 @@ from lazysafe.model import Classification, ImportModel, ModuleNode, Origin
 
 
 def _classify_module(node: ModuleNode) -> Classification:
-    """classify a module based on its findings."""
     rules = {f.rule for f in node.findings}
 
     if rules & {"SE02", "SE03", "SE04", "SE07"}:
@@ -28,7 +27,6 @@ def _classify_module(node: ModuleNode) -> Classification:
     return Classification.SAFE
 
 
-def classify_all(model: ImportModel) -> None:
-    """classify all modules in the model."""
+def classify_all(model: ImportModel):
     for node in model.modules:
         node.classification = _classify_module(node)

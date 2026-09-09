@@ -8,7 +8,6 @@ from lazysafe.model import ImportModel, ImportStmt, ModuleNode, Origin
 
 
 def _classify_origin(module: str, own_prefixes: set[str]) -> Origin:
-    """classify a module as own, stdlib, third-party, or unknown."""
     top = module.split(".")[0]
 
     if top in sys.stdlib_module_names:
@@ -23,11 +22,10 @@ def _classify_origin(module: str, own_prefixes: set[str]) -> Origin:
     return Origin.UNKNOWN
 
 
-_THIRD_PARTY_TOP_LEVELS: set[str] = set()
+_THIRD_PARTY_TOP_LEVELS = set()
 
 
-def _refresh_third_party() -> None:
-    """populate third-party top-level names from sys.path."""
+def _refresh_third_party():
     global _THIRD_PARTY_TOP_LEVELS
     try:
         import importlib.metadata
@@ -43,7 +41,6 @@ def _refresh_third_party() -> None:
 def _make_import(
     module: str, names: list[str], lineno: int, is_try_except: bool = False
 ) -> ImportStmt:
-    """create an ImportStmt."""
     return ImportStmt(
         module=module,
         names=names,
@@ -53,8 +50,7 @@ def _make_import(
 
 
 def _extract_imports_from_handler(handler: ast.ExceptHandler) -> list[ImportStmt]:
-    """extract imports from a try/except ImportError handler."""
-    imports: list[ImportStmt] = []
+    imports = []
 
     for stmt in ast.iter_child_nodes(handler):
         if isinstance(stmt, ast.Import):
@@ -78,8 +74,7 @@ def _extract_imports_from_handler(handler: ast.ExceptHandler) -> list[ImportStmt
 
 
 def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
-    """extract top-level import statements from an AST."""
-    imports: list[ImportStmt] = []
+    imports = []
 
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Import):
@@ -104,55 +99,81 @@ def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
     return imports
 
 
-def scan_directory(
-    targets: list[str], project_root: Path
-) -> ImportModel:
-    """walk target directories and build an ImportModel."""
-    _refresh_third_party()
-    model = ImportModel()
+def _resolve_target(target: str, project_root: Path) -> Path:
+    target_path = Path(target).resolve()
+    if not target_path.is_absolute():
+        target_path = (project_root / target).resolve()
+    return target_path
 
-    own_prefixes: set[str] = set()
+
+def _relative_to_any(path: Path, root: Path, fallback: Path) -> Path:
+    try:
+        return path.relative_to(root)
+    except ValueError:
+        return path.relative_to(fallback)
+
+
+def _collect_own_prefixes(
+    targets: list[str], project_root: Path
+) -> set[str]:
+    own_prefixes = set()
     for target in targets:
-        target_path = project_root / target
+        target_path = _resolve_target(target, project_root)
         if target_path.exists():
             for py_file in target_path.rglob("*.py"):
-                rel = py_file.relative_to(project_root)
+                rel = _relative_to_any(py_file, project_root, target_path.parent)
                 module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
                 top = module.split(".")[0]
                 if top:
                     own_prefixes.add(top)
+    return own_prefixes
 
-    for target in targets:
-        target_path = project_root / target
-        if not target_path.exists():
-            model.skipped.append({"path": target, "reason": "not-found"})
+
+def _scan_target(
+    target: str,
+    project_root: Path,
+    own_prefixes: set[str],
+    model: ImportModel,
+):
+    target_path = _resolve_target(target, project_root)
+    if not target_path.exists():
+        model.skipped.append({"path": target, "reason": "not-found"})
+        return
+
+    for py_file in sorted(target_path.rglob("*.py")):
+        rel = _relative_to_any(py_file, project_root, target_path.parent)
+        module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
+
+        if module.endswith(".__init__"):
+            module = module[: -len(".__init__")]
+
+        try:
+            source = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(py_file))
+        except (SyntaxError, UnicodeDecodeError) as exc:
+            model.skipped.append({"path": str(rel), "reason": str(exc)})
             continue
 
-        for py_file in sorted(target_path.rglob("*.py")):
-            rel = py_file.relative_to(project_root)
-            module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
+        origin = _classify_origin(module, own_prefixes)
+        imports = _extract_imports(tree)
 
-            if module.endswith(".__init__"):
-                module = module[: -len(".__init__")]
+        node = ModuleNode(
+            module=module,
+            file=str(rel),
+            origin=origin,
+            imports=imports,
+        )
+        model.modules.append(node)
 
-            try:
-                source = py_file.read_text(encoding="utf-8")
-                tree = ast.parse(source, filename=str(py_file))
-            except (SyntaxError, UnicodeDecodeError) as exc:
-                model.skipped.append(
-                    {"path": str(rel), "reason": str(exc)}
-                )
-                continue
 
-            origin = _classify_origin(module, own_prefixes)
-            imports = _extract_imports(tree)
+def scan_directory(
+    targets: list[str], project_root: Path
+) -> ImportModel:
+    _refresh_third_party()
+    model = ImportModel()
+    own_prefixes = _collect_own_prefixes(targets, project_root)
 
-            node = ModuleNode(
-                module=module,
-                file=str(rel),
-                origin=origin,
-                imports=imports,
-            )
-            model.modules.append(node)
+    for target in targets:
+        _scan_target(target, project_root, own_prefixes, model)
 
     return model

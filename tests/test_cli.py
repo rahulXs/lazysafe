@@ -1,13 +1,16 @@
 """tests for CLI commands."""
 
+import pytest
+
 from lazysafe.cli import main
 
 
-def test_version_command(capsys):
-    main(["version"])
+def test_version_flag(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+    assert exc_info.value.code == 0
     captured = capsys.readouterr()
-    assert "lazysafe 0.1.0" in captured.out
-    assert "analyze" in captured.out
+    assert "lazysafe" in captured.out
 
 
 def test_analyze_command(capsys):

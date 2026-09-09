@@ -7,14 +7,10 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    """lazysafe configuration."""
-
     targets: list[str] = field(default_factory=lambda: ["src"])
     budget_ms: float | None = None
     measure_runs: int = 15
     measure_warmup: int = 2
-    probe_timeout: float = 30.0
-    apply_mode: str = "dunder"
     allowlist: list[str] = field(default_factory=list)
 
 
@@ -23,8 +19,6 @@ _KNOWN_KEYS = {
     "budget_ms",
     "measure_runs",
     "measure_warmup",
-    "probe_timeout",
-    "apply_mode",
     "allowlist",
 }
 

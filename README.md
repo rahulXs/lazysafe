@@ -28,8 +28,8 @@ lazysafe analyze src/
 # show all modules including safe ones
 lazysafe analyze src/ --all
 
-# save a JSON report
-lazysafe analyze src/ --save report.json
+# measure startup time
+lazysafe measure python -m myapp --budget 500
 ```
 
 ## what it does
@@ -42,7 +42,7 @@ by its side-effect risk:
 | SAFE | no side effects detected | safe to make lazy |
 | RISKY | might have side effects | investigate before lazy |
 | UNSAFE | side effect detected | keep eager |
-| UNKNOWN | can't determine statically | needs probing (v0.3.0) |
+| UNKNOWN | can't determine statically | needs further investigation |
 
 ### side-effect rules
 
@@ -61,7 +61,6 @@ by its side-effect risk:
 
 - runtime lazy-loading for older pythons (no backport of PEP 810)
 - patching third-party packages' code
-- function-level profiling (use [Tachyon](https://docs.python.org/3.15/whatsnew/3.15.html#tachyon) in 3.15)
 - general linting/formatting (use [ruff](https://docs.astral.sh/ruff/))
 
 ## requirements
