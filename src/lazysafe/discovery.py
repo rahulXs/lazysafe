@@ -73,6 +73,18 @@ def _extract_imports_from_handler(handler: ast.ExceptHandler) -> list[ImportStmt
     return imports
 
 
+def _is_import_error_handler(handler: ast.ExceptHandler) -> bool:
+    if handler.type is None:
+        return False
+    if isinstance(handler.type, ast.Name):
+        return handler.type.id in ("ImportError", "ModuleNotFoundError")
+    if isinstance(handler.type, ast.Tuple):
+        for elt in handler.type.elts:
+            if isinstance(elt, ast.Name) and elt.id in ("ImportError", "ModuleNotFoundError"):
+                return True
+    return False
+
+
 def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
     imports = []
 
@@ -88,12 +100,7 @@ def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
             imports.append(_make_import(module, names, node.lineno))
         elif isinstance(node, ast.Try):
             for handler in node.handlers:
-                is_import_error = (
-                    handler.type is not None
-                    and isinstance(handler.type, ast.Name)
-                    and handler.type.id == "ImportError"
-                )
-                if is_import_error:
+                if _is_import_error_handler(handler):
                     imports.extend(_extract_imports_from_handler(handler))
 
     return imports

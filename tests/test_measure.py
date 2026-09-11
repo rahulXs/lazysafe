@@ -88,3 +88,23 @@ def test_result_to_dict_with_budget():
     assert d["budget"] is not None
     assert "limit_ms" in d["budget"]
     assert "passed" in d["budget"]
+
+
+def test_measure_invalid_runs():
+    """test that runs=0 raises ValueError."""
+    import pytest
+    with pytest.raises(ValueError, match="runs must be >= 1"):
+        measure(["json"], runs=0, warmup=1)
+
+
+def test_measure_invalid_warmup():
+    """test that warmup=-1 raises ValueError."""
+    import pytest
+    with pytest.raises(ValueError, match="warmup must be >= 0"):
+        measure(["json"], runs=2, warmup=-1)
+
+
+def test_measure_bad_command():
+    """test that bad command returns zero results."""
+    result = measure(["nonexistent_module_xyz"], runs=1, warmup=0)
+    assert result.total_ms["p50"] == 0.0

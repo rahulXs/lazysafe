@@ -5,7 +5,7 @@ from pathlib import Path
 from lazysafe.discovery import scan_directory
 from lazysafe.model import Classification, Origin
 from lazysafe.static import run_static
-from lazysafe.static.classify import classify_all
+from lazysafe.static.classify import _classify_module, classify_all
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -63,6 +63,30 @@ def test_se08_detects_try_except_fallback():
     node = _analyze_fixture("se08_tryexcept")
     rules = {f.rule for f in node.findings}
     assert "SE08" in rules
+
+
+def test_se08_detects_tuple_except():
+    node = _analyze_fixture("se08_tuple_except")
+    rules = {f.rule for f in node.findings}
+    assert "SE08" in rules
+
+
+def test_se03_detects_augassign():
+    node = _analyze_fixture("se03_augassign")
+    rules = {f.rule for f in node.findings}
+    assert "SE02" in rules
+
+
+def test_se06_detects_registration_decorators():
+    node = _analyze_fixture("se06_decorators")
+    rules = {f.rule for f in node.findings}
+    assert "SE06" in rules
+
+
+def test_se06_classifies_risky():
+    node = _analyze_fixture("se06_decorators")
+    classify_result = _classify_module(node)
+    assert classify_result == Classification.RISKY
 
 
 def test_clean_package_classifies_safe():

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.1] - 2026-09-10
+
+### fixed
+
+- SE06 classification: modules with registration decorators now correctly classify as RISKY
+- tuple exception handlers: `except (ImportError, ModuleNotFoundError):` now detected
+- augmented assignments: `sys.path += [...]` now detected by SE02/SE03
+- `--runs 0` / `--warmup 0` now properly handled instead of silently ignored
+- subprocess failures in measure now return clear error instead of 0ms false results
+- `measure` validates inputs and raises ValueError for invalid runs/warmup
+- `TimeoutExpired` and `FileNotFoundError` now caught in measure
+
 ## [0.2.0] - 2026-09-09
 
 ### added

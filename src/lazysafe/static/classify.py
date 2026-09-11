@@ -10,15 +10,9 @@ def _classify_module(node: ModuleNode) -> Classification:
         return Classification.UNSAFE
 
     if "SE01" in rules:
-        for f in node.findings:
-            if f.rule == "SE01" and f.confidence >= 0.6:
-                return Classification.RISKY
-
-    if rules & {"SE05", "SE08"}:
         return Classification.RISKY
 
-    se06_count = sum(1 for f in node.findings if f.rule == "SE06")
-    if se06_count >= 2:
+    if rules & {"SE05", "SE06", "SE08"}:
         return Classification.RISKY
 
     if node.origin in (Origin.THIRD_PARTY, Origin.UNKNOWN) and not node.findings:

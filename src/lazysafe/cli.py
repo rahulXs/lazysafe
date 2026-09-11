@@ -80,8 +80,8 @@ def _cmd_measure(args: argparse.Namespace):
 
     result = measure(
         args.entry_command,
-        runs=args.runs or config.measure_runs,
-        warmup=args.warmup or config.measure_warmup,
+        runs=args.runs if args.runs is not None else config.measure_runs,
+        warmup=args.warmup if args.warmup is not None else config.measure_warmup,
         budget_ms=budget,
         python=args.python,
     )

@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ModuleTiming:
-    """timing for a single imported module."""
-
     module: str
     cumulative_us: int
     self_us: int
@@ -17,8 +15,6 @@ class ModuleTiming:
 
 @dataclass
 class MeasureResult:
-    """result of a measurement run."""
-
     entry_command: list[str]
     interpreter: str
     runs: dict[str, int]
@@ -56,12 +52,20 @@ def _run_timed(
     else:
         cmd = [exe, "-X", "importtime", *command]
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return -1.0, []
+    except FileNotFoundError:
+        return -1.0, []
+
+    if result.returncode != 0:
+        return -1.0, []
 
     total_us = 0
     modules = []
@@ -86,7 +90,11 @@ def measure(
     budget_ms: float | None = None,
     python: str | None = None,
 ) -> MeasureResult:
-    """measure startup time of a command over multiple runs."""
+    if runs < 1:
+        raise ValueError("runs must be >= 1")
+    if warmup < 0:
+        raise ValueError("warmup must be >= 0")
+
     all_times = []
     all_modules = []
 
@@ -94,9 +102,19 @@ def measure(
     for i in range(total_runs):
         total_ms, modules = _run_timed(command, python=python)
         if i >= warmup:
-            all_times.append(total_ms)
-            if not all_modules:
+            if total_ms >= 0:
+                all_times.append(total_ms)
+            if not all_modules and modules:
                 all_modules = modules
+
+    if not all_times:
+        return MeasureResult(
+            entry_command=command,
+            interpreter=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            runs={"warmup": warmup, "measured": runs},
+            total_ms={"p50": 0.0, "min": 0.0, "max": 0.0, "stdev": 0.0},
+            budget={"limit_ms": budget_ms, "passed": False} if budget_ms is not None else None,
+        )
 
     p50 = statistics.median(all_times)
     min_ms = min(all_times)
@@ -126,7 +144,6 @@ def measure(
 
 
 def result_to_dict(result: MeasureResult) -> dict:
-    """convert a MeasureResult to a JSON-serializable dict."""
     return {
         "schema_version": 1,
         "entry_command": result.entry_command,

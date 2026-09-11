@@ -51,9 +51,17 @@ def _check_se02(tree: ast.Module) -> list[SEFinding]:
     findings = []
 
     for node in ast.iter_child_nodes(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                is_foreign = (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                )
+                if is_foreign:
+                    evidence = f"{target.value.id}.{target.attr}"
+                    findings.append(_make_finding("SE02", node.lineno, evidence, 0.9))
+        elif isinstance(node, ast.AugAssign):
+            target = node.target
             is_foreign = (
                 isinstance(target, ast.Attribute)
                 and isinstance(target.value, ast.Name)
@@ -69,9 +77,12 @@ def _check_se03(tree: ast.Module) -> list[SEFinding]:
     findings = []
 
     for node in ast.iter_child_nodes(tree):
-        if not isinstance(node, ast.Assign):
+        if not isinstance(node, (ast.Assign, ast.AugAssign)):
             continue
-        for target in node.targets:
+
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+
+        for target in targets:
             is_subscript = isinstance(target, ast.Subscript)
             if not is_subscript:
                 continue
@@ -199,6 +210,18 @@ def _check_se07(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
+def _is_import_error_handler(handler: ast.ExceptHandler) -> bool:
+    if handler.type is None:
+        return False
+    if isinstance(handler.type, ast.Name):
+        return handler.type.id in ("ImportError", "ModuleNotFoundError")
+    if isinstance(handler.type, ast.Tuple):
+        for elt in handler.type.elts:
+            if isinstance(elt, ast.Name) and elt.id in ("ImportError", "ModuleNotFoundError"):
+                return True
+    return False
+
+
 def _check_se08(tree: ast.Module) -> list[SEFinding]:
     findings = []
 
@@ -206,12 +229,7 @@ def _check_se08(tree: ast.Module) -> list[SEFinding]:
         if not isinstance(node, ast.Try):
             continue
         for handler in node.handlers:
-            is_import_error = (
-                handler.type is not None
-                and isinstance(handler.type, ast.Name)
-                and handler.type.id == "ImportError"
-            )
-            if not is_import_error:
+            if not _is_import_error_handler(handler):
                 continue
 
             has_patch = any(
