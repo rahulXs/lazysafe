@@ -49,9 +49,10 @@ def _error_profile(module: str, error: str, duration_ms: float = 0) -> dict:
 
 def _probe_module(module: str, python: str, timeout: float) -> dict:
     out_path = Path(tempfile.gettempdir()) / f"lazysafe_probe_{module.replace('.', '_')}.json"
+    out_posix = out_path.as_posix()
     child_script = (
         f"from lazysafe._probe_child import run; "
-        f"run('{module}', '{out_path}')"
+        f"run('{module}', '{out_posix}')"
     )
 
     src_dir = str(Path(__file__).parent.parent)
