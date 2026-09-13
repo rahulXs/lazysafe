@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -47,7 +48,7 @@ def _error_profile(module: str, error: str, duration_ms: float = 0) -> dict:
 
 
 def _probe_module(module: str, python: str, timeout: float) -> dict:
-    out_path = Path(f"/tmp/lazysafe_probe_{module.replace('.', '_')}.json")
+    out_path = Path(tempfile.gettempdir()) / f"lazysafe_probe_{module.replace('.', '_')}.json"
     child_script = (
         f"from lazysafe._probe_child import run; "
         f"run('{module}', '{out_path}')"
