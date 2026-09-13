@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "lazysafe"
 dynamic = ["version"]
-description = "safely adopt python 3.15 lazy imports: analyze, probe, apply, verify, measure"
+description = "analyze, measure, and probe python 3.15 lazy import readiness"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"

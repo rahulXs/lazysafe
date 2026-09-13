@@ -4,9 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] - 2026-09-13
+
+### Added
+
+- `lazysafe probe` dynamic side-effect profiling via subprocess sandbox
+- snapshot dimensions: threads, atexit, signal handlers, sys.path, env, cwd, umask, fds, warnings filters
+- verdict classification: safe / risky / unsafe / error
+- profile cache with automatic invalidation (module + interpreter + mtime key)
+- `--python EXE`, `--timeout S`, `--refresh`, `--json` flags
+- timeout handling (default 30s)
+- subprocess error handling (FileNotFoundError, TimeoutExpired)
+
 ## [0.2.1] - 2026-09-10
 
-### fixed
+### Fixed
 
 - SE06 classification: modules with registration decorators now correctly classify as RISKY
 - tuple exception handlers: `except (ImportError, ModuleNotFoundError):` now detected
@@ -18,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.2.0] - 2026-09-09
 
-### added
+### Added
 
 - `lazysafe measure` startup timing harness using `-X importtime`
 - fresh-process timing with warmup runs
@@ -30,17 +42,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.1.0] - 2026-09-06
 
-### added
+### Added
 
 - `lazysafe analyze` static analysis engine with SE01-SE08 side-effect rules
 - classification decision tree (SAFE / RISKY / UNSAFE / UNKNOWN)
 - JSON report output (`--save`, `--json` flags)
-- `lazysafe version` command with capability matrix
 - configuration via `lazysafe.toml` with unknown-key rejection
 - fixture corpus for side-effect rule testing
-
-### side-effect rules
-
 - SE01: module-level call expressions
 - SE02: foreign attribute assignment (monkeypatching)
 - SE03: sys.path / sys.modules / os.environ mutation

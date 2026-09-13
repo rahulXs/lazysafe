@@ -30,6 +30,9 @@ lazysafe analyze src/ --all
 
 # measure startup time
 lazysafe measure python -m myapp --budget 500
+
+# probe modules for runtime side effects
+lazysafe probe requests flask yaml
 ```
 
 ## what it does
