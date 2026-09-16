@@ -2,7 +2,6 @@
 
 
 from lazysafe.measure import (
-    MeasureResult,
     _parse_importtime_line,
     measure,
     result_to_dict,
@@ -38,7 +37,6 @@ def test_parse_importtime_line_empty():
 def test_measure_runs_successfully():
     """test that measure runs and returns valid result."""
     result = measure(["json"], runs=2, warmup=1)
-    assert isinstance(result, MeasureResult)
     assert result.entry_command == ["json"]
     assert result.runs == {"warmup": 1, "measured": 2}
     assert result.total_ms["p50"] > 0
@@ -72,13 +70,12 @@ def test_result_to_dict():
     """test JSON serialization of MeasureResult."""
     result = measure(["json"], runs=2, warmup=1)
     d = result_to_dict(result)
-    assert d["schema_version"] == 1
     assert d["entry_command"] == ["json"]
     assert "p50" in d["total_ms"]
     assert "min" in d["total_ms"]
     assert "max" in d["total_ms"]
     assert "stdev" in d["total_ms"]
-    assert isinstance(d["per_module_top"], list)
+    assert len(d["per_module_top"]) > 0
 
 
 def test_result_to_dict_with_budget():

@@ -171,6 +171,80 @@ def _cmd_probe(args: argparse.Namespace):
         print()
 
 
+def _build_apply_model(args: argparse.Namespace):
+    from lazysafe.config import load_config
+
+    config = load_config(Path.cwd())
+    targets = args.targets or config.targets
+    project_root = Path.cwd()
+
+    model = scan_directory(targets, project_root)
+    for node in model.modules:
+        if node.file:
+            try:
+                source = Path(node.file).read_text(encoding="utf-8")
+                node.findings = run_static(node, source)
+            except (OSError, UnicodeDecodeError):
+                pass
+    classify_all(model)
+    return model
+
+
+def _cmd_apply(args: argparse.Namespace):
+    from lazysafe.apply.backup import create_backup
+    from lazysafe.apply.plan import plan_keyword
+
+    model = _build_apply_model(args)
+    plan = plan_keyword(model, safe_only=not args.include_unsafe)
+
+    if not plan.changes:
+        print("\n  no safe imports to rewrite.\n")
+        return
+
+    total_rewrites = sum(len(c.rewrites) for c in plan.changes)
+    print(f"\n  {total_rewrites} import(s) to rewrite in {len(plan.changes)} file(s)\n")
+
+    if plan.skipped:
+        print(f"  skipped {len(plan.skipped)} import(s) (not safe):")
+        for s in plan.skipped[:10]:
+            print(f"    {s.module}: {s.reason}")
+        print()
+
+    for change in plan.changes:
+        print(f"  {change.path}")
+        for rewrite in change.rewrites:
+            print(f"    L{rewrite.lineno}: {rewrite.old_line.strip()}")
+            print(f"      -> {rewrite.new_line.strip()}")
+        print()
+
+    if args.dry_run:
+        print("  dry run -- no files modified.\n")
+        return
+
+    backup_path = create_backup(plan, Path.cwd())
+    print(f"  backup: {backup_path}\n")
+
+    for change in plan.changes:
+        _apply_file(change)
+
+    print(f"  applied {total_rewrites} rewrite(s).\n")
+
+
+def _apply_file(change):
+    source = change.path.read_text(encoding="utf-8")
+    lines = source.splitlines(keepends=True)
+
+    for rewrite in sorted(change.rewrites, key=lambda r: r.lineno, reverse=True):
+        idx = rewrite.lineno - 1
+        if 0 <= idx < len(lines):
+            old_content = lines[idx]
+            indent = old_content[: len(old_content) - len(old_content.lstrip())]
+            rest = rewrite.new_line.lstrip()
+            lines[idx] = f"{indent}{rest}\n"
+
+    change.path.write_text("".join(lines), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="lazysafe",
@@ -203,6 +277,14 @@ def main(argv: list[str] | None = None) -> None:
     p_probe.add_argument("--refresh", action="store_true", help="ignore cache")
     p_probe.add_argument("--json", action="store_true", help="output as JSON")
 
+    p_apply = sub.add_parser("apply", help="rewrite safe imports to lazy")
+    p_apply.add_argument("targets", nargs="*", help="directories to scan")
+    p_apply.add_argument("--dry-run", action="store_true", help="show diff without writing")
+    p_apply.add_argument("--safe-only", action="store_true", default=True,
+                         help="only rewrite SAFE modules (default)")
+    p_apply.add_argument("--include-unsafe", action="store_true",
+                         help="also rewrite RISKY/UNSAFE modules")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -213,6 +295,7 @@ def main(argv: list[str] | None = None) -> None:
         "analyze": _cmd_analyze,
         "measure": _cmd_measure,
         "probe": _cmd_probe,
+        "apply": _cmd_apply,
     }
 
     if args.command in commands:

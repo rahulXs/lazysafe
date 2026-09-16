@@ -7,12 +7,6 @@ from lazysafe._version import __version__
 from lazysafe.model import ImportModel
 
 
-def _json_default(obj: object) -> object:
-    if hasattr(obj, "value"):
-        return obj.value
-    raise TypeError(f"not serializable: {type(obj)}")
-
-
 def write_analysis_report(
     model: ImportModel,
     targets: list[str],

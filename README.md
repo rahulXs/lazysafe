@@ -29,10 +29,16 @@ lazysafe analyze src/
 lazysafe analyze src/ --all
 
 # measure startup time
-lazysafe measure python -m myapp --budget 500
+lazysafe measure --runs 3 -- python -m myapp
 
 # probe modules for runtime side effects
 lazysafe probe requests flask yaml
+
+# preview lazy import rewrites
+lazysafe apply src/ --dry-run
+
+# apply lazy import rewrites to safe modules
+lazysafe apply src/
 ```
 
 ## what it does

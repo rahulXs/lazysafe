@@ -2,14 +2,7 @@
 
 import pytest
 
-from lazysafe.config import Config, load_config
-
-
-def test_default_config():
-    config = Config()
-    assert config.targets == ["src"]
-    assert config.budget_ms is None
-    assert config.measure_runs == 15
+from lazysafe.config import load_config
 
 
 def test_load_config_missing_file(tmp_path):

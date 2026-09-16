@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] - 2026-09-13
+
+### Added
+
+- `lazysafe apply` command to rewrite safe imports to lazy
+- keyword mode: rewrites `import X` to `lazy import X` for SAFE modules
+- `--dry-run` flag to preview changes without modifying files
+- `--safe-only` flag (default) to only rewrite SAFE modules
+- `--include-unsafe` flag to also rewrite RISKY/UNSAFE modules
+- backup/restore under `.lazysafe/backup/<runid>/`
+- plan data structure with change tracking and skip reasons
+
 ## [0.3.0] - 2026-09-13
 
 ### Added
