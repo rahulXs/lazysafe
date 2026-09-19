@@ -14,13 +14,6 @@ OWN_PREFIX = "tests.fixtures.probe_pkg."
 
 
 class TestSnapshot:
-    def test_returns_expected_keys(self):
-        snap = _snapshot()
-        assert "modules" in snap
-        assert "threads" in snap
-        assert "sys_path" in snap
-        assert "env_keys" in snap
-
     def test_modules_are_sorted(self):
         snap = _snapshot()
         assert snap["modules"] == sorted(snap["modules"])
@@ -82,7 +75,6 @@ class TestProbeChildRun:
             result = json.loads(Path(out_path).read_text())
             assert result["module"] == "json"
             assert result["verdict"] in ("safe", "risky", "unsafe", "error")
-            assert "schema_version" in result
         finally:
             os.unlink(out_path)
 

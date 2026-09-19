@@ -1,18 +1,10 @@
 """plan data structure and planner logic."""
 
-from __future__ import annotations
-
 import ast
 from dataclasses import dataclass
 from pathlib import Path
 
 from lazysafe.model import ImportModel
-
-
-@dataclass
-class FileChange:
-    path: Path
-    rewrites: list[ImportRewrite]
 
 
 @dataclass
@@ -24,16 +16,22 @@ class ImportRewrite:
 
 
 @dataclass
-class Plan:
-    changes: list[FileChange]
-    skipped: list[SkippedImport]
-
-
-@dataclass
 class SkippedImport:
     module: str
     file: Path
     reason: str
+
+
+@dataclass
+class FileChange:
+    path: Path
+    rewrites: list[ImportRewrite]
+
+
+@dataclass
+class Plan:
+    changes: list[FileChange]
+    skipped: list[SkippedImport]
 
 
 def plan_keyword(model: ImportModel, *, safe_only: bool = True) -> Plan:

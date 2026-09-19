@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] - 2026-09-13
+
+### Added
+
+- `lazysafe verify` command for behavioral equivalence checking
+- runs command in eager and lazy modes, compares exit codes and output
+- output normalization (durations, temp paths, hex addresses, Python version)
+- auto-revert from backup on divergence
+- `--python` and `--lazy-python` flags for interpreter selection
+- `--json` flag for JSON output
+
+### Fixed
+
+- `-X lazy_imports` changed to `-X lazy_imports=all` (PEP 810 requires value)
+
 ## [0.4.0] - 2026-09-13
 
 ### Added

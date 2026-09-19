@@ -1,7 +1,5 @@
 """backup and restore for apply operations."""
 
-from __future__ import annotations
-
 import shutil
 import time
 from pathlib import Path

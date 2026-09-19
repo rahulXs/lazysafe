@@ -230,6 +230,39 @@ def _cmd_apply(args: argparse.Namespace):
     print(f"  applied {total_rewrites} rewrite(s).\n")
 
 
+def _cmd_verify(args: argparse.Namespace):
+    from lazysafe.verify import verify
+
+    command = args.command_to_run
+    result = verify(
+        command,
+        python=args.python,
+        lazy_python=args.lazy_python,
+    )
+
+    if args.json:
+        print(json.dumps({
+            "equivalent": result.equivalent,
+            "eager_exit": result.eager.exit_code,
+            "lazy_exit": result.lazy.exit_code,
+            "diffs": result.diffs,
+        }, indent=2))
+    else:
+        status = "EQUIVALENT" if result.equivalent else "DIVERGENT"
+        print(f"\n  verdict: {status}")
+        print(f"  eager exit: {result.eager.exit_code}")
+        print(f"  lazy exit:  {result.lazy.exit_code}")
+
+        if result.diffs:
+            print("\n  diffs:")
+            for d in result.diffs:
+                print(f"    - {d}")
+        print()
+
+    if not result.equivalent:
+        sys.exit(1)
+
+
 def _apply_file(change):
     source = change.path.read_text(encoding="utf-8")
     lines = source.splitlines(keepends=True)
@@ -285,6 +318,12 @@ def main(argv: list[str] | None = None) -> None:
     p_apply.add_argument("--include-unsafe", action="store_true",
                          help="also rewrite RISKY/UNSAFE modules")
 
+    p_verify = sub.add_parser("verify", help="verify eager vs lazy equivalence")
+    p_verify.add_argument("command_to_run", nargs="+", help="command to verify")
+    p_verify.add_argument("--python", help="python interpreter for eager mode")
+    p_verify.add_argument("--lazy-python", help="python 3.15+ for lazy mode")
+    p_verify.add_argument("--json", action="store_true", help="output as JSON")
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -296,6 +335,7 @@ def main(argv: list[str] | None = None) -> None:
         "measure": _cmd_measure,
         "probe": _cmd_probe,
         "apply": _cmd_apply,
+        "verify": _cmd_verify,
     }
 
     if args.command in commands:

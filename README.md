@@ -39,6 +39,9 @@ lazysafe apply src/ --dry-run
 
 # apply lazy import rewrites to safe modules
 lazysafe apply src/
+
+# verify eager vs lazy equivalence
+lazysafe verify -- python -m pytest -q
 ```
 
 ## what it does

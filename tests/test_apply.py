@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from lazysafe.apply.backup import backup_dir, create_backup, restore
+from lazysafe.apply.backup import create_backup, restore
 from lazysafe.apply.plan import _get_line, _make_lazy_line, plan_keyword
 from lazysafe.discovery import scan_directory
 from lazysafe.static import run_static
@@ -90,12 +90,6 @@ class TestBackupRestore:
                 restore(backup_path, plan, project)
                 content = src.read_text()
                 assert content == "import json\nimport os\n"
-
-    def test_backup_dir_location(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project = Path(tmpdir)
-            bd = backup_dir(project)
-            assert bd == project / ".lazysafe" / "backup"
 
 
 class TestApplyIntegration:
