@@ -9,9 +9,11 @@ from lazysafe.cli import main
 
 def _write_single_rewrite_fixture(root: Path) -> Path:
     """Flat fixture whose plan holds exactly one rewrite."""
-    (root / "safe_dep.py").write_text("VALUE = 1\n")
+    # write_bytes: write_text would translate newlines to \r\n on Windows,
+    # which breaks the exact-byte assertions below.
+    (root / "safe_dep.py").write_bytes(b"VALUE = 1\n")
     consumer = root / "consumer.py"
-    consumer.write_text("import safe_dep\n")
+    consumer.write_bytes(b"import safe_dep\n")
     return consumer
 
 
