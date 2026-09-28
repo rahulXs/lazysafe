@@ -34,11 +34,11 @@ lazysafe measure --runs 3 -- python -m myapp
 # probe modules for runtime side effects
 lazysafe probe requests flask yaml
 
-# preview lazy import rewrites
+# preview lazy import rewrites (experimental preview only; writes disabled)
 lazysafe apply src/ --dry-run
-
-# apply lazy import rewrites to safe modules
-lazysafe apply src/
+# NOTE: `lazysafe apply` without --dry-run exits nonzero without modifying
+# files. source writes stay disabled until verified backup, transaction, and
+# recovery support is available.
 
 # verify eager vs lazy equivalence
 lazysafe verify -- python -m pytest -q

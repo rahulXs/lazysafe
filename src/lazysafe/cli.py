@@ -190,8 +190,15 @@ def _build_apply_model(args: argparse.Namespace):
     return model
 
 
+_APPLY_WRITES_UNAVAILABLE = (
+    "lazysafe apply cannot write source files in this release: "
+    "the write path has no verified backup, transaction, or recovery support. "
+    "Writes stay disabled until a verified, recoverable write path is available. "
+    "Re-run with --dry-run to preview candidates without modifying files."
+)
+
+
 def _cmd_apply(args: argparse.Namespace):
-    from lazysafe.apply.backup import create_backup
     from lazysafe.apply.plan import plan_keyword
 
     model = _build_apply_model(args)
@@ -202,7 +209,8 @@ def _cmd_apply(args: argparse.Namespace):
         return
 
     total_rewrites = sum(len(c.rewrites) for c in plan.changes)
-    print(f"\n  {total_rewrites} import(s) to rewrite in {len(plan.changes)} file(s)\n")
+    print("\n  experimental preview -- source writes are disabled in this release.\n")
+    print(f"  {total_rewrites} import(s) to rewrite in {len(plan.changes)} file(s)\n")
 
     if plan.skipped:
         print(f"  skipped {len(plan.skipped)} import(s) (not safe):")
@@ -221,13 +229,8 @@ def _cmd_apply(args: argparse.Namespace):
         print("  dry run -- no files modified.\n")
         return
 
-    backup_path = create_backup(plan, Path.cwd())
-    print(f"  backup: {backup_path}\n")
-
-    for change in plan.changes:
-        _apply_file(change)
-
-    print(f"  applied {total_rewrites} rewrite(s).\n")
+    print(f"  {_APPLY_WRITES_UNAVAILABLE}\n", file=sys.stderr)
+    sys.exit(2)
 
 
 def _cmd_verify(args: argparse.Namespace):
@@ -263,21 +266,6 @@ def _cmd_verify(args: argparse.Namespace):
         sys.exit(1)
 
 
-def _apply_file(change):
-    source = change.path.read_text(encoding="utf-8")
-    lines = source.splitlines(keepends=True)
-
-    for rewrite in sorted(change.rewrites, key=lambda r: r.lineno, reverse=True):
-        idx = rewrite.lineno - 1
-        if 0 <= idx < len(lines):
-            old_content = lines[idx]
-            indent = old_content[: len(old_content) - len(old_content.lstrip())]
-            rest = rewrite.new_line.lstrip()
-            lines[idx] = f"{indent}{rest}\n"
-
-    change.path.write_text("".join(lines), encoding="utf-8")
-
-
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="lazysafe",
@@ -310,9 +298,15 @@ def main(argv: list[str] | None = None) -> None:
     p_probe.add_argument("--refresh", action="store_true", help="ignore cache")
     p_probe.add_argument("--json", action="store_true", help="output as JSON")
 
-    p_apply = sub.add_parser("apply", help="rewrite safe imports to lazy")
+    p_apply = sub.add_parser(
+        "apply", help="preview lazy import rewrites (experimental; writes disabled)"
+    )
     p_apply.add_argument("targets", nargs="*", help="directories to scan")
-    p_apply.add_argument("--dry-run", action="store_true", help="show diff without writing")
+    p_apply.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show preview without writing (writes are disabled in this release)",
+    )
     p_apply.add_argument("--safe-only", action="store_true", default=True,
                          help="only rewrite SAFE modules (default)")
     p_apply.add_argument("--include-unsafe", action="store_true",
