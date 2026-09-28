@@ -75,3 +75,32 @@ class TestApplyWritesDisabled:
         assert "no files modified" in captured.out
         assert consumer.read_bytes() == b"import safe_dep\n"
         assert not (tmp_path / ".lazysafe").exists()
+
+
+class TestMeasureContainment:
+    def test_budget_flag_rejected(self, capsys):
+        with pytest.raises(SystemExit) as exc_info:
+            main(["measure", "--runs", "1", "--warmup", "0", "--budget", "100", "json"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "budget gating is unavailable" in captured.err
+
+    def test_failed_command_exits_nonzero(self, capsys):
+        with pytest.raises(SystemExit) as exc_info:
+            main(["measure", "--runs", "1", "--warmup", "0", "nonexistent_module_xyz"])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "sample(s) failed" in captured.err
+
+    def test_invalid_counts_rejected_before_launch(self, capsys):
+        with pytest.raises(SystemExit) as exc_info:
+            main(["measure", "--runs", "0", "--warmup", "0", "json"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "runs must be >= 1" in captured.err
+
+    def test_successful_run_labels_import_profile(self, capsys):
+        main(["measure", "--runs", "1", "--warmup", "0", "json"])
+        captured = capsys.readouterr()
+        assert "import-profile data" in captured.out
+        assert "not command duration" in captured.out

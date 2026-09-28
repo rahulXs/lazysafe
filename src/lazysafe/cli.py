@@ -76,18 +76,38 @@ def _print_analysis_table(report: dict, args: argparse.Namespace):
 
 
 def _cmd_measure(args: argparse.Namespace):
+    from lazysafe.measure import BUDGET_UNAVAILABLE
+
     config = load_config(Path.cwd())
     budget = args.budget if args.budget is not None else config.budget_ms
+    if budget is not None:
+        print(f"  error: {BUDGET_UNAVAILABLE}\n", file=sys.stderr)
+        sys.exit(2)
 
-    result = measure(
-        args.entry_command,
-        runs=args.runs if args.runs is not None else config.measure_runs,
-        warmup=args.warmup if args.warmup is not None else config.measure_warmup,
-        budget_ms=budget,
-        python=args.python,
-    )
+    try:
+        result = measure(
+            args.entry_command,
+            runs=args.runs if args.runs is not None else config.measure_runs,
+            warmup=args.warmup if args.warmup is not None else config.measure_warmup,
+            python=args.python,
+        )
+    except ValueError as exc:
+        print(f"  error: {exc}\n", file=sys.stderr)
+        sys.exit(2)
 
     report = result_to_dict(result)
+
+    if not result.ok:
+        if args.json:
+            print(json.dumps(report, indent=2))
+        failed = report["runs"]["failed"]
+        kinds = sorted({e["kind"] for e in report["errors"]})
+        print(
+            f"  error: {failed} sample(s) failed ({', '.join(kinds)}); "
+            "no timing to report.\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if args.json:
         print(json.dumps(report, indent=2))
@@ -97,16 +117,12 @@ def _cmd_measure(args: argparse.Namespace):
         print(f"  python:  {report['interpreter']}")
         warmup = report['runs']['warmup']
         measured = report['runs']['measured']
-        print(f"  runs:    {warmup} warmup + {measured} measured\n")
+        print(f"  runs:    {warmup} warmup + {measured} measured")
+        print("  metric:  import-profile data (-X importtime), not command duration\n")
         print(f"  p50:     {stats['p50']}ms")
         print(f"  min:     {stats['min']}ms")
         print(f"  max:     {stats['max']}ms")
         print(f"  stdev:   {stats['stdev']}ms")
-
-        if report["budget"]:
-            b = report["budget"]
-            status = "PASS" if b["passed"] else "FAIL"
-            print(f"\n  budget:  {b['limit_ms']}ms -> {status}")
 
         if report["per_module_top"]:
             print("\n  top modules:")
@@ -116,9 +132,6 @@ def _cmd_measure(args: argparse.Namespace):
                 print(f"    {mod['module']:40s} {cum:>8.1f}ms (self {self_ms:.1f}ms)")
 
         print()
-
-    if report["budget"] and not report["budget"]["passed"]:
-        sys.exit(1)
 
 
 _EFFECT_LABELS = {
@@ -283,11 +296,13 @@ def main(argv: list[str] | None = None) -> None:
         "--all", action="store_true", help="show safe modules too"
     )
 
-    p_measure = sub.add_parser("measure", help="measure startup time")
+    p_measure = sub.add_parser("measure", help="measure import-profile timing")
     p_measure.add_argument("entry_command", nargs="+", help="command to measure")
     p_measure.add_argument("--runs", type=int, help="number of measured runs")
     p_measure.add_argument("--warmup", type=int, help="number of warmup runs")
-    p_measure.add_argument("--budget", type=float, help="max p50 startup time in ms")
+    p_measure.add_argument(
+        "--budget", type=float, help="budget gating (currently unavailable)"
+    )
     p_measure.add_argument("--python", help="python interpreter to use")
     p_measure.add_argument("--json", action="store_true", help="output as JSON")
 

@@ -28,7 +28,7 @@ lazysafe analyze src/
 # show all modules including safe ones
 lazysafe analyze src/ --all
 
-# measure startup time
+# measure import-profile data (not command duration)
 lazysafe measure --runs 3 -- python -m myapp
 
 # probe modules for runtime side effects
