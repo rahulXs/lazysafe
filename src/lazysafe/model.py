@@ -42,6 +42,7 @@ class ModuleNode:
     imports: list[ImportStmt] = field(default_factory=list)
     findings: list[SEFinding] = field(default_factory=list)
     classification: Classification = Classification.UNKNOWN
+    coverage_gaps: list[str] = field(default_factory=list)
 
 
 @dataclass

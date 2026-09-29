@@ -147,6 +147,10 @@ def _scan_target(
         model.skipped.append({"path": target, "reason": "not-found"})
         return
 
+    if not target_path.is_dir():
+        model.skipped.append({"path": target, "reason": "not-a-directory"})
+        return
+
     for py_file in sorted(target_path.rglob("*.py")):
         rel = _relative_to_any(py_file, project_root, target_path.parent)
         module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
@@ -157,7 +161,7 @@ def _scan_target(
         try:
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
-        except (SyntaxError, UnicodeDecodeError) as exc:
+        except (OSError, SyntaxError, UnicodeDecodeError) as exc:
             model.skipped.append({"path": str(rel), "reason": str(exc)})
             continue
 

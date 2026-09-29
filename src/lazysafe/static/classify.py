@@ -4,6 +4,9 @@ from lazysafe.model import Classification, ImportModel, ModuleNode, Origin
 
 
 def _classify_module(node: ModuleNode) -> Classification:
+    if node.coverage_gaps:
+        return Classification.UNKNOWN
+
     rules = {f.rule for f in node.findings}
 
     if rules & {"SE02", "SE03", "SE04", "SE07"}:

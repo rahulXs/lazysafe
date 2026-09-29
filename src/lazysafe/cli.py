@@ -15,6 +15,21 @@ from lazysafe.report import write_analysis_report
 from lazysafe.static import run_static
 from lazysafe.static.classify import classify_all
 
+_INVALID_TARGET_HELP = {
+    "not-found": "no such file or directory",
+    "not-a-directory": "not a directory; pass a directory to scan",
+}
+
+
+def _read_source_for_analysis(node, model):
+    """Re-read an already-scanned file; records a coverage gap on failure."""
+    try:
+        return Path(node.file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        node.coverage_gaps.append("source unreadable during analysis")
+        model.skipped.append({"path": node.file, "reason": "unreadable"})
+        return None
+
 
 def _cmd_analyze(args: argparse.Namespace):
     config = load_config(Path.cwd())
@@ -26,17 +41,28 @@ def _cmd_analyze(args: argparse.Namespace):
 
     for node in model.modules:
         if node.file:
-            try:
-                source = Path(node.file).read_text(encoding="utf-8")
+            source = _read_source_for_analysis(node, model)
+            if source is not None:
                 node.findings = run_static(node, source)
-            except (OSError, UnicodeDecodeError):
-                pass
 
     classify_all(model)
 
     report = write_analysis_report(model, targets, duration_ms)
 
     _print_analysis_table(report, args)
+
+    invalid = [s for s in report["skipped"] if s["reason"] in _INVALID_TARGET_HELP]
+    if invalid:
+        for entry in invalid:
+            print(
+                f"  error: {entry['path']}: {_INVALID_TARGET_HELP[entry['reason']]}\n",
+                file=sys.stderr,
+            )
+        sys.exit(2)
+
+    if report["stats"]["files_scanned"] == 0:
+        print("  no modules examined; no safety claim made.\n", file=sys.stderr)
+        sys.exit(1)
 
 
 def _print_analysis_table(report: dict, args: argparse.Namespace):
@@ -53,9 +79,19 @@ def _print_analysis_table(report: dict, args: argparse.Namespace):
         f"{stats['by_class']['unknown']} unknown"
     )
 
+    skipped = [s for s in report["skipped"] if s["reason"] not in _INVALID_TARGET_HELP]
+
     has_findings = any(mod["reasons"] for mod in report["modules"])
+    if not report["modules"]:
+        _print_skipped(skipped)
+        return
+
     if not has_findings and not args.all:
-        print("\n  all imports look safe. use --all to see every module.\n")
+        print(
+            f"\n  no side effects detected in {stats['files_scanned']} examined "
+            "file(s) (heuristic, not proof). use --all to see every module.\n"
+        )
+        _print_skipped(skipped)
         return
 
     for mod in report["modules"]:
@@ -72,6 +108,16 @@ def _print_analysis_table(report: dict, args: argparse.Namespace):
         for reason in mod["reasons"]:
             print(f"    {reason['rule']}@{reason['lineno']}: {reason['evidence']}")
 
+    print()
+    _print_skipped(skipped)
+
+
+def _print_skipped(skipped: list) -> None:
+    if not skipped:
+        return
+    print(f"  skipped {len(skipped)} file(s):")
+    for entry in skipped[:10]:
+        print(f"    {entry['path']}: {entry['reason']}")
     print()
 
 
@@ -103,8 +149,7 @@ def _cmd_measure(args: argparse.Namespace):
         failed = report["runs"]["failed"]
         kinds = sorted({e["kind"] for e in report["errors"]})
         print(
-            f"  error: {failed} sample(s) failed ({', '.join(kinds)}); "
-            "no timing to report.\n",
+            f"  error: {failed} sample(s) failed ({', '.join(kinds)}); no timing to report.\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -194,11 +239,9 @@ def _build_apply_model(args: argparse.Namespace):
     model = scan_directory(targets, project_root)
     for node in model.modules:
         if node.file:
-            try:
-                source = Path(node.file).read_text(encoding="utf-8")
+            source = _read_source_for_analysis(node, model)
+            if source is not None:
                 node.findings = run_static(node, source)
-            except (OSError, UnicodeDecodeError):
-                pass
     classify_all(model)
     return model
 
@@ -300,9 +343,7 @@ def main(argv: list[str] | None = None) -> None:
     p_measure.add_argument("entry_command", nargs="+", help="command to measure")
     p_measure.add_argument("--runs", type=int, help="number of measured runs")
     p_measure.add_argument("--warmup", type=int, help="number of warmup runs")
-    p_measure.add_argument(
-        "--budget", type=float, help="budget gating (currently unavailable)"
-    )
+    p_measure.add_argument("--budget", type=float, help="budget gating (currently unavailable)")
     p_measure.add_argument("--python", help="python interpreter to use")
     p_measure.add_argument("--json", action="store_true", help="output as JSON")
 

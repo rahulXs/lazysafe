@@ -1,5 +1,6 @@
 """tests for CLI commands."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -104,3 +105,79 @@ class TestMeasureContainment:
         captured = capsys.readouterr()
         assert "import-profile data" in captured.out
         assert "not command duration" in captured.out
+
+
+class TestAnalyzeIncomplete:
+    def test_missing_target_fails(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc_info:
+            main(["analyze", "does-not-exist"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "does-not-exist" in captured.err
+        assert "no such file" in captured.err
+        assert "look safe" not in captured.out
+
+    def test_file_target_fails(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "one.py").write_bytes(b"VALUE = 1\n")
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc_info:
+            main(["analyze", "one.py"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "not a directory" in captured.err
+        assert "look safe" not in captured.out
+
+    def test_empty_directory_makes_no_claim(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc_info:
+            main(["analyze", "."])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "no modules examined" in captured.err
+        assert "look safe" not in captured.out
+        assert "no side effects detected" not in captured.out
+
+    def test_broken_only_directory_makes_no_claim(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "broken.py").write_bytes(b"def broken(:\n")
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc_info:
+            main(["analyze", "."])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "skipped 1 file(s)" in captured.out
+        assert "broken.py" in captured.out
+        assert "look safe" not in captured.out
+
+    def test_good_and_broken_directory_warns_but_passes(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "good.py").write_bytes(b"VALUE = 1\n")
+        (tmp_path / "broken.py").write_bytes(b"def broken(:\n")
+        monkeypatch.chdir(tmp_path)
+        main(["analyze", "."])
+        captured = capsys.readouterr()
+        assert "scanned 1 files" in captured.out
+        assert "skipped 1 file(s)" in captured.out
+        assert "broken.py" in captured.out
+
+    def test_unreadable_file_is_reported(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "good.py").write_bytes(b"VALUE = 1\n")
+        target = tmp_path / "noread.py"
+        target.write_bytes(b"VALUE = 1\n")
+        target.chmod(0o000)
+        if os.access(target, os.R_OK):
+            pytest.skip("platform still allows reading the file")
+        try:
+            monkeypatch.chdir(tmp_path)
+            main(["analyze", "."])
+        finally:
+            target.chmod(0o644)
+        captured = capsys.readouterr()
+        assert "skipped 1 file(s)" in captured.out
+        assert "noread.py" in captured.out
+        assert "look safe" not in captured.out
+
+    def test_clean_scan_qualifies_safe(self, capsys):
+        main(["analyze", "tests/fixtures/clean_pkg"])
+        captured = capsys.readouterr()
+        assert "heuristic, not proof" in captured.out
+        assert "look safe" not in captured.out
