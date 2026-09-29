@@ -1,7 +1,5 @@
-"""dynamic side-effect profiling via subprocess sandbox."""
+"""dynamic side-effect profiling in a child process."""
 
-import contextlib
-import hashlib
 import json
 import os
 import subprocess
@@ -11,27 +9,6 @@ import time
 from pathlib import Path
 
 _INTERPRETER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-
-
-def _get_cache_dir() -> Path:
-    return Path(".lazysafe/cache/profiles")
-
-
-def _get_cache_key(module: str, python: str) -> str:
-    interpreter = subprocess.run(
-        [python, "-c", "import sys; print(sys.version)"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-    try:
-        spec = __import__("importlib").util.find_spec(module)
-        mtime = Path(spec.origin).stat().st_mtime if spec and spec.origin else 0
-    except (ModuleNotFoundError, AttributeError, OSError):
-        mtime = 0
-
-    raw = f"{module}:{interpreter}:{mtime}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def _error_profile(module: str, error: str, duration_ms: float = 0) -> dict:
@@ -98,28 +75,16 @@ def probe(
     timeout: float = 30.0,
     refresh: bool = False,
 ) -> list[dict]:
+    """Probe each module in a child process. Nothing is cached.
+
+    The host never imports the target: the module name travels as a plain
+    string and only the child imports it. `refresh` is accepted for
+    compatibility and ignored.
+    """
     exe = python or sys.executable
-    cache_dir = _get_cache_dir()
     results = []
 
     for module in modules:
-        cache_key = _get_cache_key(module, exe)
-        cache_path = cache_dir / f"{cache_key}.json"
-
-        if not refresh and cache_path.exists():
-            try:
-                profile = json.loads(cache_path.read_text())
-                results.append(profile)
-                continue
-            except (json.JSONDecodeError, OSError):
-                pass
-
-        profile = _probe_module(module, exe, timeout)
-
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(OSError):
-            cache_path.write_text(json.dumps(profile, indent=2))
-
-        results.append(profile)
+        results.append(_probe_module(module, exe, timeout))
 
     return results

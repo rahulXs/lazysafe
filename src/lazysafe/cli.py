@@ -351,7 +351,9 @@ def main(argv: list[str] | None = None) -> None:
     p_probe.add_argument("modules", nargs="+", help="modules to probe")
     p_probe.add_argument("--python", help="python interpreter to use")
     p_probe.add_argument("--timeout", type=float, default=30.0, help="timeout in seconds")
-    p_probe.add_argument("--refresh", action="store_true", help="ignore cache")
+    p_probe.add_argument(
+        "--refresh", action="store_true", help="no-op: probe results are never cached"
+    )
     p_probe.add_argument("--json", action="store_true", help="output as JSON")
 
     p_apply = sub.add_parser(

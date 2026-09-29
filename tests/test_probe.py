@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 from lazysafe._probe_child import _classify_verdict, _diff_snapshots, _snapshot, run
-from lazysafe.probe import _get_cache_dir, probe
+from lazysafe.probe import probe
 
 FIXTURES = Path(__file__).parent / "fixtures" / "probe_pkg"
 OWN_PREFIX = "tests.fixtures.probe_pkg."
@@ -146,11 +146,47 @@ class TestProbe:
         finally:
             sys.path.pop(0)
 
-    def test_cache_hit_avoids_subprocess(self):
+    def test_no_cache_written(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         sys.path.insert(0, str(FIXTURES))
         try:
-            probe([f"{OWN_PREFIX}pure"])
-            cache_dir = _get_cache_dir()
-            assert any(cache_dir.glob("*.json"))
+            results = probe([f"{OWN_PREFIX}pure"])
+            assert results[0]["verdict"] == "safe"
         finally:
             sys.path.pop(0)
+        assert not (tmp_path / ".lazysafe").exists()
+
+
+class TestProbeIsolation:
+    def test_dotted_target_never_runs_in_host(self, tmp_path, monkeypatch):
+        import importlib.util  # noqa: F401 -- loads the old host-import path
+
+        pkg = tmp_path / "hostiso_parent"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_bytes(
+            b"import os\n"
+            b"from pathlib import Path\n"
+            b'Path("host-import-pid.txt").write_text(str(os.getpid()))\n'
+        )
+        (pkg / "child.py").write_bytes(b"VALUE = 1\n")
+        monkeypatch.chdir(tmp_path)
+        sys.path.insert(0, str(tmp_path))
+        try:
+            assert "hostiso_parent" not in sys.modules
+            results = probe(["hostiso_parent.child"], timeout=30)
+            assert len(results) == 1
+            assert results[0]["module"] == "hostiso_parent.child"
+            assert "hostiso_parent" not in sys.modules
+            marker = tmp_path / "host-import-pid.txt"
+            assert marker.exists()
+            assert int(marker.read_text().strip()) != os.getpid()
+        finally:
+            sys.path.pop(0)
+            sys.modules.pop("hostiso_parent", None)
+            sys.modules.pop("hostiso_parent.child", None)
+
+    def test_simple_module_probes_with_timeout(self):
+        results = probe(["json"], timeout=10)
+        assert len(results) == 1
+        assert results[0]["module"] == "json"
+        assert results[0]["verdict"] in ("safe", "risky", "unsafe", "error")

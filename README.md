@@ -32,6 +32,8 @@ lazysafe analyze src/ --all
 lazysafe measure --runs 3 -- python -m myapp
 
 # probe modules for runtime side effects
+# NOTE: probing imports the target in a child process running with your
+# permissions. it is not a sandbox, and results are never cached.
 lazysafe probe requests flask yaml
 
 # preview lazy import rewrites (experimental preview only; writes disabled)
