@@ -32,7 +32,8 @@ jobs:
   # selected 3.15 build cannot actually defer an explicit lazy import, so it is
   # never continue-on-error. It qualifies ubuntu only: it says nothing about the
   # Windows or macOS paths.
-  native-lazy-3.15:
+  # Job IDs may only contain alphanumerics, '_' and '-', so this is 315 not 3.15.
+  native-lazy-315:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
