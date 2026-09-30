@@ -27,3 +27,34 @@ jobs:
       - run: uv sync
       - run: uv run pytest -q
       - run: uv run ruff check .
+
+  # Required native qualification. This job must fail rather than skip when the
+  # selected 3.15 build cannot actually defer an explicit lazy import, so it is
+  # never continue-on-error. It qualifies ubuntu only: it says nothing about the
+  # Windows or macOS paths.
+  native-lazy-3.15:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.15"
+      - run: uv sync
+      - name: report interpreter build
+        run: |
+          uv run python -VV
+          uv run python -c "import sys; print(sys.implementation.name, sys.implementation.cache_tag)"
+      - name: report accepted lazy modes
+        run: |
+          for mode in normal all none; do
+            if uv run python -X "lazy_imports=$mode" -c "pass" 2>/dev/null; then
+              echo "lazy_imports=$mode: accepted"
+            else
+              echo "lazy_imports=$mode: rejected"
+            fi
+          done
+      - name: run suite with required native lazy qualification
+        run: uv run pytest -q
+        env:
+          LAZYSAFE_REQUIRE_NATIVE_LAZY: "1"
+      - run: uv run ruff check .

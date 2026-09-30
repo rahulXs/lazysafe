@@ -7,7 +7,7 @@ from pathlib import Path
 from lazysafe.model import ImportModel, ImportStmt, ModuleNode, Origin
 
 
-def _classify_origin(module: str, own_prefixes: set[str]) -> Origin:
+def _classify_origin(module, own_prefixes):
     top = module.split(".")[0]
 
     if top in sys.stdlib_module_names:
@@ -38,9 +38,7 @@ def _refresh_third_party():
         _THIRD_PARTY_TOP_LEVELS = set()
 
 
-def _make_import(
-    module: str, names: list[str], lineno: int, is_try_except: bool = False
-) -> ImportStmt:
+def _make_import(module, names, lineno, is_try_except=False):
     return ImportStmt(
         module=module,
         names=names,
@@ -49,7 +47,7 @@ def _make_import(
     )
 
 
-def _extract_imports_from_handler(handler: ast.ExceptHandler) -> list[ImportStmt]:
+def _extract_imports_from_handler(handler):
     imports = []
 
     for stmt in ast.iter_child_nodes(handler):
@@ -73,7 +71,7 @@ def _extract_imports_from_handler(handler: ast.ExceptHandler) -> list[ImportStmt
     return imports
 
 
-def _is_import_error_handler(handler: ast.ExceptHandler) -> bool:
+def _is_import_error_handler(handler):
     if handler.type is None:
         return False
     if isinstance(handler.type, ast.Name):
@@ -85,7 +83,7 @@ def _is_import_error_handler(handler: ast.ExceptHandler) -> bool:
     return False
 
 
-def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
+def _extract_imports(tree):
     imports = []
 
     for node in ast.iter_child_nodes(tree):
@@ -106,23 +104,21 @@ def _extract_imports(tree: ast.Module) -> list[ImportStmt]:
     return imports
 
 
-def _resolve_target(target: str, project_root: Path) -> Path:
+def _resolve_target(target, project_root):
     target_path = Path(target).resolve()
     if not target_path.is_absolute():
         target_path = (project_root / target).resolve()
     return target_path
 
 
-def _relative_to_any(path: Path, root: Path, fallback: Path) -> Path:
+def _relative_to_any(path, root, fallback):
     try:
         return path.relative_to(root)
     except ValueError:
         return path.relative_to(fallback)
 
 
-def _collect_own_prefixes(
-    targets: list[str], project_root: Path
-) -> set[str]:
+def _collect_own_prefixes(targets, project_root):
     own_prefixes = set()
     for target in targets:
         target_path = _resolve_target(target, project_root)
@@ -136,12 +132,7 @@ def _collect_own_prefixes(
     return own_prefixes
 
 
-def _scan_target(
-    target: str,
-    project_root: Path,
-    own_prefixes: set[str],
-    model: ImportModel,
-):
+def _scan_target(target, project_root, own_prefixes, model):
     target_path = _resolve_target(target, project_root)
     if not target_path.exists():
         model.skipped.append({"path": target, "reason": "not-found"})
@@ -177,9 +168,7 @@ def _scan_target(
         model.modules.append(node)
 
 
-def scan_directory(
-    targets: list[str], project_root: Path
-) -> ImportModel:
+def scan_directory(targets, project_root):
     _refresh_third_party()
     model = ImportModel()
     own_prefixes = _collect_own_prefixes(targets, project_root)

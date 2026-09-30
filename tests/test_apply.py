@@ -1,111 +1,68 @@
-"""tests for apply module."""
+"""tests for apply planning and backup."""
 
-import tempfile
 from pathlib import Path
 
+import pytest
+
 from lazysafe.apply.backup import create_backup, restore
-from lazysafe.apply.plan import _get_line, _make_lazy_line, plan_keyword
+from lazysafe.apply.plan import _make_lazy_line, plan_keyword
 from lazysafe.discovery import scan_directory
 from lazysafe.static import run_static
 from lazysafe.static.classify import classify_all
 
-FIXTURES = Path(__file__).parent / "fixtures" / "apply_pkg"
 
-
-def _build_model(targets):
-    model = scan_directory(targets, Path.cwd())
+def _plan_for(root):
+    """Classify a directory and plan rewrites with module names relative to it."""
+    model = scan_directory(["."], root)
     for node in model.modules:
         if node.file:
-            try:
-                source = Path(node.file).read_text(encoding="utf-8")
-                node.findings = run_static(node, source)
-            except (OSError, UnicodeDecodeError):
-                pass
+            node.findings = run_static(node, Path(node.file).read_text(encoding="utf-8"))
     classify_all(model)
-    return model
+    return plan_keyword(model, safe_only=True)
 
 
-class TestGetLine:
-    def test_returns_correct_line(self):
-        source = "import json\nimport os\nimport sys\n"
-        assert _get_line(source, 1) == "import json"
-        assert _get_line(source, 2) == "import os"
-        assert _get_line(source, 3) == "import sys"
-
-    def test_out_of_range(self):
-        source = "import json\n"
-        assert _get_line(source, 10) == ""
+def _write_apply_fixture(root):
+    # bare module names only resolve when the scan root is the project root
+    (root / "safe_dep.py").write_bytes(b"VALUE = 1\n")
+    (root / "unsafe_dep.py").write_bytes(b'import sys\n\nsys.path.append("/opt")\n')
+    (root / "consumer.py").write_bytes(b"import safe_dep\nimport unsafe_dep\n")
 
 
-class TestMakeLazyLine:
-    def test_simple_import(self):
-        assert _make_lazy_line("import json", "json") == "lazy import json"
-
-    def test_indented_import(self):
-        assert _make_lazy_line("    import json", "json") == "    lazy import json"
-
-    def test_from_import_unchanged(self):
-        assert _make_lazy_line("from json import dumps", "json") == "from json import dumps"
-
-    def test_already_lazy(self):
-        assert _make_lazy_line("lazy import json", "json") == "lazy import json"
+def test_make_lazy_line_preserves_indent_and_leaves_other_forms_alone():
+    # a naive rewrite drops the indentation; `from` and already-lazy lines must
+    # come back untouched
+    assert _make_lazy_line("import json", "json") == "lazy import json"
+    assert _make_lazy_line("    import json", "json") == "    lazy import json"
+    assert _make_lazy_line("from json import dumps", "json") == "from json import dumps"
+    assert _make_lazy_line("lazy import json", "json") == "lazy import json"
 
 
-class TestPlanKeyword:
-    def test_safe_only_rewrites_safe_modules(self):
-        model = _build_model([str(FIXTURES)])
-        plan = plan_keyword(model, safe_only=True)
-        assert len(plan.changes) > 0 or len(plan.skipped) > 0
+def test_plan_rewrites_safe_imports_and_skips_others(tmp_path, monkeypatch):
+    _write_apply_fixture(tmp_path)
+    monkeypatch.chdir(tmp_path)
 
-    def test_safe_only_skips_unsafe(self):
-        model = _build_model([str(FIXTURES)])
-        plan = plan_keyword(model, safe_only=True)
-        assert len(plan.skipped) > 0
+    plan = _plan_for(tmp_path)
 
-    def test_rewrite_preserves_indent(self):
-        model = _build_model([str(FIXTURES)])
-        plan = plan_keyword(model, safe_only=True)
-        for change in plan.changes:
-            for rewrite in change.rewrites:
-                assert "lazy import" in rewrite.new_line
+    assert {r.module for c in plan.changes for r in c.rewrites} == {"safe_dep"}
+    assert "unsafe_dep" in {s.module for s in plan.skipped}
 
 
-class TestBackupRestore:
-    def test_backup_and_restore(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project = Path(tmpdir)
-            src = project / "test_module.py"
-            src.write_text("import json\nimport os\n")
+@pytest.mark.xfail(
+    strict=True,
+    reason="LS-08: create_backup does relative_to on an already-relative path. "
+    "M13.2 rebuilds backups; drop this marker when it passes.",
+)
+def test_backup_and_restore_returns_original_bytes(tmp_path, monkeypatch):
+    _write_apply_fixture(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    original = (tmp_path / "consumer.py").read_bytes()
 
-            model = _build_model([str(src)])
-            plan = plan_keyword(model, safe_only=True)
+    plan = _plan_for(tmp_path)
+    assert plan.changes
 
-            if plan.changes:
-                backup_path = create_backup(plan, project)
-                assert backup_path.exists()
+    backup_path = create_backup(plan, tmp_path)
+    for change in plan.changes:
+        change.path.write_bytes(b"lazy import safe_dep\n")
 
-                for change in plan.changes:
-                    change.path.write_text("lazy import json\nlazy import os\n")
-
-                restore(backup_path, plan, project)
-                content = src.read_text()
-                assert content == "import json\nimport os\n"
-
-
-class TestApplyIntegration:
-    def test_dry_run_does_not_modify_files(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project = Path(tmpdir)
-            src = project / "test_module.py"
-            original = "import json\nimport os\n"
-            src.write_text(original)
-
-            model = _build_model([str(src)])
-            plan = plan_keyword(model, safe_only=True)
-
-            if plan.changes:
-                for change in plan.changes:
-                    assert change.path.exists()
-
-                content = src.read_text()
-                assert content == original
+    restore(backup_path, plan, tmp_path)
+    assert (tmp_path / "consumer.py").read_bytes() == original

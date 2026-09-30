@@ -83,6 +83,26 @@ by its side-effect risk:
 - target programs using lazy import semantics require python >= 3.15
 - linux, macos, windows
 
+### native lazy qualification
+
+lazysafe never infers lazy support from a version string or a successful launch.
+CPython 3.14 accepts `-X lazy_imports=all` and then imports eagerly anyway, so a
+clean start is not evidence that anything was deferred.
+
+qualification therefore runs real behavior in a child process on the selected
+interpreter: an explicit `lazy import` must bind the name without executing the
+module, and first use must then execute it. the CI job for python 3.15 is
+required, prints the exact interpreter build, and fails if that behavior is not
+observed rather than skipping.
+
+what this does and does not cover:
+
+- native lazy behavior is qualified on ubuntu with the 3.15 build CI selects;
+  the job does not qualify the Windows or macOS paths
+- the modes `-X lazy_imports=normal` and `-X lazy_imports=all` are exercised.
+  lazysafe does not rely on any other mode
+- the 3.11-3.14 jobs still run the rest of the suite and do not claim lazy support
+
 ## links
 
 - [changelog](https://github.com/rahulxs/lazysafe/blob/main/CHANGELOG.md)

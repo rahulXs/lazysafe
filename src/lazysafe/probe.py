@@ -11,7 +11,7 @@ from pathlib import Path
 _INTERPRETER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
 
-def _error_profile(module: str, error: str, duration_ms: float = 0) -> dict:
+def _error_profile(module, error, duration_ms=0):
     return {
         "schema_version": 1,
         "module": module,
@@ -24,7 +24,7 @@ def _error_profile(module: str, error: str, duration_ms: float = 0) -> dict:
     }
 
 
-def _probe_module(module: str, python: str, timeout: float) -> dict:
+def _probe_module(module, python, timeout):
     out_path = Path(tempfile.gettempdir()) / f"lazysafe_probe_{module.replace('.', '_')}.json"
     out_posix = out_path.as_posix()
     child_script = (
@@ -68,18 +68,11 @@ def _probe_module(module: str, python: str, timeout: float) -> dict:
     return _error_profile(module, stderr_msg, round(duration_ms, 1))
 
 
-def probe(
-    modules: list[str],
-    *,
-    python: str | None = None,
-    timeout: float = 30.0,
-    refresh: bool = False,
-) -> list[dict]:
-    """Probe each module in a child process. Nothing is cached.
+def probe(modules, *, python=None, timeout=30.0, refresh=False):
+    """Import each module in a child process and record what it changed.
 
-    The host never imports the target: the module name travels as a plain
-    string and only the child imports it. `refresh` is accepted for
-    compatibility and ignored.
+    The host never imports the target. Results are never cached, so `refresh`
+    is accepted and ignored.
     """
     exe = python or sys.executable
     results = []

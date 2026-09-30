@@ -49,7 +49,7 @@ class MeasureResult:
     ok: bool = True
 
 
-def _parse_importtime_line(line: str) -> tuple[int, int, str] | None:
+def _parse_importtime_line(line):
     if not line.startswith("import time:"):
         return None
 
@@ -67,10 +67,7 @@ def _parse_importtime_line(line: str) -> tuple[int, int, str] | None:
     return cumulative_us, self_us, module
 
 
-def _run_sample(
-    command: list[str],
-    python: str | None = None,
-) -> _Sample:
+def _run_sample(command, python=None):
     exe = python or sys.executable
 
     if len(command) == 1 and not command[0].startswith("-"):
@@ -117,13 +114,13 @@ def _run_sample(
 
 
 def measure(
-    command: list[str],
+    command,
     *,
-    runs: int = 15,
-    warmup: int = 2,
-    budget_ms: float | None = None,
-    python: str | None = None,
-) -> MeasureResult:
+    runs=15,
+    warmup=2,
+    budget_ms=None,
+    python=None,
+):
     if runs < 1:
         raise ValueError("runs must be >= 1")
     if warmup < 0:
@@ -132,8 +129,8 @@ def measure(
         raise ValueError(BUDGET_UNAVAILABLE)
 
     measured_times = []
-    first_modules: list[ModuleTiming] = []
-    errors: list[SampleError] = []
+    first_modules = []
+    errors = []
     succeeded = 0
     failed = 0
 
@@ -184,7 +181,7 @@ def measure(
     )
 
 
-def result_to_dict(result: MeasureResult) -> dict:
+def result_to_dict(result):
     return {
         "schema_version": 1,
         "metric": "import_profile_max_cumulative_ms",

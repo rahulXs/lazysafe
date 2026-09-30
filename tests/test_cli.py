@@ -1,17 +1,16 @@
 """tests for CLI commands."""
 
 import os
-from pathlib import Path
 
 import pytest
 
 from lazysafe.cli import main
 
 
-def _write_single_rewrite_fixture(root: Path) -> Path:
+def _write_single_rewrite_fixture(root):
     """Flat fixture whose plan holds exactly one rewrite."""
-    # write_bytes: write_text would translate newlines to \r\n on Windows,
-    # which breaks the exact-byte assertions below.
+    # write_bytes, not write_text: that would give \r\n on Windows and break
+    # the exact-byte assertions below.
     (root / "safe_dep.py").write_bytes(b"VALUE = 1\n")
     consumer = root / "consumer.py"
     consumer.write_bytes(b"import safe_dep\n")

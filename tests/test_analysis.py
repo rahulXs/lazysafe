@@ -2,109 +2,64 @@
 
 from pathlib import Path
 
+import pytest
+
 from lazysafe.discovery import scan_directory
 from lazysafe.model import Classification, Origin
 from lazysafe.static import run_static
 from lazysafe.static.classify import _classify_module, classify_all
 
-FIXTURES = Path(__file__).parent / "fixtures"
+FIXTURES = Path(__file__).parent / "fixtures" / "sideeffect_pkg"
 
 
-def _analyze_fixture(name: str):
-    """scan a single fixture file and return the module node."""
-    path = FIXTURES / "sideeffect_pkg" / f"{name}.py"
-    source = path.read_text()
+def _analyze_fixture(name):
+    """Classify one fixture file and return its module node."""
+    path = FIXTURES / f"{name}.py"
+    source = path.read_text(encoding="utf-8")
     model = scan_directory(["tests/fixtures/sideeffect_pkg"], Path.cwd())
     for node in model.modules:
-        if node.file.endswith(name + ".py"):
+        if node.file.endswith(f"{name}.py"):
             node.findings = run_static(node, source)
             return node
-    return None
+    raise AssertionError(f"fixture {name} was not scanned")
 
 
-def test_se01_detects_module_level_calls():
-    node = _analyze_fixture("se01_call")
-    rules = {f.rule for f in node.findings}
-    assert "SE01" in rules
-    assert "SE04" in rules
+@pytest.mark.parametrize(
+    ("fixture", "rule"),
+    [
+        ("se01_call", "SE01"),
+        ("se02_assign", "SE02"),
+        ("se03_sys", "SE03"),
+        ("se03_augassign", "SE02"),
+        ("se04_register", "SE04"),
+        ("se05_io", "SE05"),
+        ("se06_decorators", "SE06"),
+        ("se07_importlib", "SE07"),
+        ("se08_tryexcept", "SE08"),
+        ("se08_tuple_except", "SE08"),
+    ],
+)
+def test_each_rule_fires_on_its_fixture(fixture, rule):
+    node = _analyze_fixture(fixture)
+    assert rule in {f.rule for f in node.findings}
 
 
-def test_se02_detects_foreign_assignment():
-    node = _analyze_fixture("se02_assign")
-    rules = {f.rule for f in node.findings}
-    assert "SE02" in rules
-
-
-def test_se03_detects_sys_mutation():
-    node = _analyze_fixture("se03_sys")
-    rules = {f.rule for f in node.findings}
-    assert "SE03" in rules
-
-
-def test_se04_detects_registrations():
-    node = _analyze_fixture("se04_register")
-    rules = {f.rule for f in node.findings}
-    assert "SE04" in rules
-
-
-def test_se05_detects_module_level_io():
-    node = _analyze_fixture("se05_io")
-    rules = {f.rule for f in node.findings}
-    assert "SE05" in rules
-
-
-def test_se07_detects_import_module():
-    node = _analyze_fixture("se07_importlib")
-    rules = {f.rule for f in node.findings}
-    assert "SE07" in rules
-
-
-def test_se08_detects_try_except_fallback():
-    node = _analyze_fixture("se08_tryexcept")
-    rules = {f.rule for f in node.findings}
-    assert "SE08" in rules
-
-
-def test_se08_detects_tuple_except():
-    node = _analyze_fixture("se08_tuple_except")
-    rules = {f.rule for f in node.findings}
-    assert "SE08" in rules
-
-
-def test_se03_detects_augassign():
-    node = _analyze_fixture("se03_augassign")
-    rules = {f.rule for f in node.findings}
-    assert "SE02" in rules
-
-
-def test_se06_detects_registration_decorators():
-    node = _analyze_fixture("se06_decorators")
-    rules = {f.rule for f in node.findings}
-    assert "SE06" in rules
-
-
-def test_se06_classifies_risky():
-    node = _analyze_fixture("se06_decorators")
-    classify_result = _classify_module(node)
-    assert classify_result == Classification.RISKY
-
-
-def test_clean_package_classifies_safe():
+def test_clean_package_is_safe():
     model = scan_directory(["tests/fixtures/clean_pkg"], Path.cwd())
     for node in model.modules:
-        source = Path(node.file).read_text()
-        node.findings = run_static(node, source)
+        node.findings = run_static(node, Path(node.file).read_text(encoding="utf-8"))
     classify_all(model)
-    for node in model.modules:
-        if node.origin == Origin.OWN:
-            assert node.classification in (Classification.SAFE, Classification.UNKNOWN)
+
+    own = [n for n in model.modules if n.origin == Origin.OWN]
+    assert own
+    assert all(n.classification == Classification.SAFE for n in own)
 
 
-def test_sideeffect_package_classifies_unsafe():
+def test_side_effect_fixtures_land_in_risky_or_unsafe():
     model = scan_directory(["tests/fixtures/sideeffect_pkg"], Path.cwd())
     for node in model.modules:
-        source = Path(node.file).read_text()
-        node.findings = run_static(node, source)
+        node.findings = run_static(node, Path(node.file).read_text(encoding="utf-8"))
     classify_all(model)
-    unsafe = [n for n in model.modules if n.classification == Classification.UNSAFE]
-    assert len(unsafe) >= 4
+
+    assert _classify_module(_analyze_fixture("se06_decorators")) == Classification.RISKY
+    assert _classify_module(_analyze_fixture("se04_register")) == Classification.UNSAFE

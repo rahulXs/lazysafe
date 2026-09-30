@@ -1,4 +1,4 @@
-"""CLI entry point -- argparse wiring only."""
+"""CLI entry point: argument parsing and text output."""
 
 import argparse
 import json
@@ -7,13 +7,15 @@ import time
 from pathlib import Path
 
 from lazysafe._version import __version__
+from lazysafe.apply.plan import plan_keyword
 from lazysafe.config import load_config
 from lazysafe.discovery import scan_directory
-from lazysafe.measure import measure, result_to_dict
+from lazysafe.measure import BUDGET_UNAVAILABLE, measure, result_to_dict
 from lazysafe.probe import probe
 from lazysafe.report import write_analysis_report
 from lazysafe.static import run_static
 from lazysafe.static.classify import classify_all
+from lazysafe.verify import verify
 
 _INVALID_TARGET_HELP = {
     "not-found": "no such file or directory",
@@ -31,7 +33,7 @@ def _read_source_for_analysis(node, model):
         return None
 
 
-def _cmd_analyze(args: argparse.Namespace):
+def _cmd_analyze(args):
     config = load_config(Path.cwd())
     targets = args.targets or config.targets
 
@@ -65,7 +67,7 @@ def _cmd_analyze(args: argparse.Namespace):
         sys.exit(1)
 
 
-def _print_analysis_table(report: dict, args: argparse.Namespace):
+def _print_analysis_table(report, args):
     if args.json:
         print(json.dumps(report, indent=2))
         return
@@ -112,7 +114,7 @@ def _print_analysis_table(report: dict, args: argparse.Namespace):
     _print_skipped(skipped)
 
 
-def _print_skipped(skipped: list) -> None:
+def _print_skipped(skipped):
     if not skipped:
         return
     print(f"  skipped {len(skipped)} file(s):")
@@ -121,9 +123,7 @@ def _print_skipped(skipped: list) -> None:
     print()
 
 
-def _cmd_measure(args: argparse.Namespace):
-    from lazysafe.measure import BUDGET_UNAVAILABLE
-
+def _cmd_measure(args):
     config = load_config(Path.cwd())
     budget = args.budget if args.budget is not None else config.budget_ms
     if budget is not None:
@@ -190,7 +190,7 @@ _EFFECT_LABELS = {
 }
 
 
-def _print_probe_profile(profile: dict):
+def _print_probe_profile(profile):
     verdict = profile["verdict"]
     symbol = {"safe": "+", "risky": "?", "unsafe": "!", "error": "x"}.get(
         verdict, "?"
@@ -213,7 +213,7 @@ def _print_probe_profile(profile: dict):
         print(f"    imports: {', '.join(imports[:5])}")
 
 
-def _cmd_probe(args: argparse.Namespace):
+def _cmd_probe(args):
     results = probe(
         args.modules,
         python=args.python,
@@ -229,9 +229,7 @@ def _cmd_probe(args: argparse.Namespace):
         print()
 
 
-def _build_apply_model(args: argparse.Namespace):
-    from lazysafe.config import load_config
-
+def _build_apply_model(args):
     config = load_config(Path.cwd())
     targets = args.targets or config.targets
     project_root = Path.cwd()
@@ -254,9 +252,7 @@ _APPLY_WRITES_UNAVAILABLE = (
 )
 
 
-def _cmd_apply(args: argparse.Namespace):
-    from lazysafe.apply.plan import plan_keyword
-
+def _cmd_apply(args):
     model = _build_apply_model(args)
     plan = plan_keyword(model, safe_only=not args.include_unsafe)
 
@@ -289,9 +285,7 @@ def _cmd_apply(args: argparse.Namespace):
     sys.exit(2)
 
 
-def _cmd_verify(args: argparse.Namespace):
-    from lazysafe.verify import verify
-
+def _cmd_verify(args):
     command = args.command_to_run
     result = verify(
         command,
@@ -322,7 +316,7 @@ def _cmd_verify(args: argparse.Namespace):
         sys.exit(1)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="lazysafe",
         description="safely adopt python 3.15 lazy imports.",
@@ -390,8 +384,4 @@ def main(argv: list[str] | None = None) -> None:
         "verify": _cmd_verify,
     }
 
-    if args.command in commands:
-        commands[args.command](args)
-    else:
-        print(f"command '{args.command}' not yet implemented.")
-        sys.exit(1)
+    commands[args.command](args)

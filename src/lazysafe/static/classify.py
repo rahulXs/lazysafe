@@ -1,21 +1,21 @@
-"""classification decision tree and SCC propagation."""
+"""classify each scanned module from its findings."""
 
-from lazysafe.model import Classification, ImportModel, ModuleNode, Origin
+from lazysafe.model import Classification, Origin
+
+_UNSAFE_RULES = {"SE02", "SE03", "SE04", "SE07"}
+_RISKY_RULES = {"SE01", "SE05", "SE06", "SE08"}
 
 
-def _classify_module(node: ModuleNode) -> Classification:
+def _classify_module(node):
     if node.coverage_gaps:
         return Classification.UNKNOWN
 
     rules = {f.rule for f in node.findings}
 
-    if rules & {"SE02", "SE03", "SE04", "SE07"}:
+    if rules & _UNSAFE_RULES:
         return Classification.UNSAFE
 
-    if "SE01" in rules:
-        return Classification.RISKY
-
-    if rules & {"SE05", "SE06", "SE08"}:
+    if rules & _RISKY_RULES:
         return Classification.RISKY
 
     if node.origin in (Origin.THIRD_PARTY, Origin.UNKNOWN) and not node.findings:
@@ -24,6 +24,6 @@ def _classify_module(node: ModuleNode) -> Classification:
     return Classification.SAFE
 
 
-def classify_all(model: ImportModel):
+def classify_all(model):
     for node in model.modules:
         node.classification = _classify_module(node)

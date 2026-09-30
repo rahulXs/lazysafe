@@ -4,14 +4,9 @@ import sys
 from datetime import UTC, datetime
 
 from lazysafe._version import __version__
-from lazysafe.model import ImportModel
 
 
-def write_analysis_report(
-    model: ImportModel,
-    targets: list[str],
-    duration_ms: float,
-) -> dict:
+def write_analysis_report(model, targets, duration_ms):
     by_class = {"safe": 0, "risky": 0, "unsafe": 0, "unknown": 0}
     for m in model.modules:
         by_class[m.classification.value] = by_class.get(m.classification.value, 0) + 1

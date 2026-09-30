@@ -4,8 +4,6 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
-from lazysafe.model import ImportModel
-
 
 @dataclass
 class ImportRewrite:
@@ -34,9 +32,9 @@ class Plan:
     skipped: list[SkippedImport]
 
 
-def plan_keyword(model: ImportModel, *, safe_only: bool = True) -> Plan:
-    changes: list[FileChange] = []
-    skipped: list[SkippedImport] = []
+def plan_keyword(model, *, safe_only=True):
+    changes = []
+    skipped = []
 
     for node in model.modules:
         if not node.file:
@@ -57,8 +55,8 @@ def plan_keyword(model: ImportModel, *, safe_only: bool = True) -> Plan:
 
 
 def _plan_file(model, file_path, source, tree, safe_only):
-    rewrites: list[ImportRewrite] = []
-    skipped: list[SkippedImport] = []
+    rewrites = []
+    skipped = []
 
     for stmt in ast.iter_child_nodes(tree):
         if not isinstance(stmt, ast.Import):
@@ -89,31 +87,28 @@ def _plan_file(model, file_path, source, tree, safe_only):
     return Plan(changes=changes, skipped=skipped)
 
 
-def _get_classification(model: ImportModel, module: str) -> str:
+def _get_classification(model, module):
     for node in model.modules:
         if node.module == module:
             return node.classification.value
     return "unknown"
 
 
-def _get_line(source: str, lineno: int) -> str:
+def _get_line(source, lineno):
     lines = source.splitlines()
     if 0 < lineno <= len(lines):
         return lines[lineno - 1]
     return ""
 
 
-def _make_lazy_line(line: str, module: str) -> str:
+def _make_lazy_line(line, module):
     stripped = line.lstrip()
+
+    if not stripped.startswith("import "):
+        return line
+
+    if stripped[len("import "):].strip() != module:
+        return line
+
     indent = line[: len(line) - len(stripped)]
-
-    if stripped.startswith("import "):
-        rest = stripped[len("import "):]
-        if rest.strip() == module:
-            return f"{indent}lazy import {module}"
-        return line
-
-    if stripped.startswith("from "):
-        return line
-
-    return line
+    return f"{indent}lazy import {module}"

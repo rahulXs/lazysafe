@@ -2,18 +2,18 @@
 
 import ast
 
-from lazysafe.model import ModuleNode, SEFinding
+from lazysafe.model import SEFinding
 
 _SYS_TARGETS = frozenset({"path", "meta_path", "modules"})
 _LOGGING_ATTRS = frozenset({"basicConfig", "config"})
 _PATH_READ_ATTRS = frozenset({"read_text", "read_bytes"})
 
 
-def _is_pure_builtin_call(node: ast.Call) -> bool:
+def _is_pure_builtin_call(node):
     return isinstance(node.func, ast.Name) and node.func.id in _PURE_BUILTINS
 
 
-def _is_importlib_import(node: ast.expr) -> bool:
+def _is_importlib_import(node):
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -23,9 +23,7 @@ def _is_importlib_import(node: ast.expr) -> bool:
     )
 
 
-def _make_finding(
-    rule: str, lineno: int, evidence: str, confidence: float
-) -> SEFinding:
+def _make_finding(rule, lineno, evidence, confidence):
     return SEFinding(
         rule=rule,
         lineno=lineno,
@@ -34,7 +32,7 @@ def _make_finding(
     )
 
 
-def _check_se01(tree: ast.Module) -> list[SEFinding]:
+def _check_se01(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -47,7 +45,7 @@ def _check_se01(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _check_se02(tree: ast.Module) -> list[SEFinding]:
+def _check_se02(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -73,7 +71,7 @@ def _check_se02(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _check_se03(tree: ast.Module) -> list[SEFinding]:
+def _check_se03(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -107,7 +105,7 @@ def _check_se03(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _check_se04(tree: ast.Module) -> list[SEFinding]:
+def _check_se04(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -138,7 +136,7 @@ def _check_se04(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _check_se05(tree: ast.Module) -> list[SEFinding]:
+def _check_se05(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -169,7 +167,7 @@ def _check_se05(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _check_se06(tree: ast.Module) -> list[SEFinding]:
+def _check_se06(tree):
     findings = []
     count = 0
 
@@ -193,7 +191,7 @@ def _check_se06(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _check_se07(tree: ast.Module) -> list[SEFinding]:
+def _check_se07(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -210,7 +208,7 @@ def _check_se07(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def _is_import_error_handler(handler: ast.ExceptHandler) -> bool:
+def _is_import_error_handler(handler):
     if handler.type is None:
         return False
     if isinstance(handler.type, ast.Name):
@@ -222,7 +220,7 @@ def _is_import_error_handler(handler: ast.ExceptHandler) -> bool:
     return False
 
 
-def _check_se08(tree: ast.Module) -> list[SEFinding]:
+def _check_se08(tree):
     findings = []
 
     for node in ast.iter_child_nodes(tree):
@@ -249,7 +247,7 @@ def _check_se08(tree: ast.Module) -> list[SEFinding]:
     return findings
 
 
-def run_static(node: ModuleNode, source: str) -> list[SEFinding]:
+def run_static(node, source):
     """run all SE rules on a module's source."""
     try:
         tree = ast.parse(source, filename=node.file)

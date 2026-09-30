@@ -2,7 +2,6 @@
 
 import tomllib
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass
@@ -23,7 +22,7 @@ _KNOWN_KEYS = {
 }
 
 
-def load_config(project_root: Path) -> Config:
+def load_config(project_root):
     """load lazysafe.toml from project root, falling back to defaults."""
     config = Config()
     config_path = project_root / "lazysafe.toml"

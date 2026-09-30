@@ -2,20 +2,17 @@
 
 import shutil
 import time
-from pathlib import Path
-
-from lazysafe.apply.plan import Plan
 
 
-def _run_id() -> str:
+def _run_id():
     return time.strftime("%Y%m%dT%H%M%S")
 
 
-def backup_dir(base: Path) -> Path:
+def backup_dir(base):
     return base / ".lazysafe" / "backup"
 
 
-def create_backup(plan: Plan, project_root: Path) -> Path:
+def create_backup(plan, project_root):
     run_id = _run_id()
     dest = backup_dir(project_root) / run_id
     dest.mkdir(parents=True, exist_ok=True)
@@ -29,7 +26,7 @@ def create_backup(plan: Plan, project_root: Path) -> Path:
     return dest
 
 
-def restore(backup_path: Path, plan: Plan, project_root: Path) -> None:
+def restore(backup_path, plan, project_root):
     for change in plan.changes:
         rel = change.path.relative_to(project_root)
         src = backup_path / rel

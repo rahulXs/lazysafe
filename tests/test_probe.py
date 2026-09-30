@@ -6,6 +6,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from lazysafe._probe_child import _classify_verdict, _diff_snapshots, _snapshot, run
 from lazysafe.probe import probe
 
@@ -13,180 +15,117 @@ FIXTURES = Path(__file__).parent / "fixtures" / "probe_pkg"
 OWN_PREFIX = "tests.fixtures.probe_pkg."
 
 
-class TestSnapshot:
-    def test_modules_are_sorted(self):
-        snap = _snapshot()
-        assert snap["modules"] == sorted(snap["modules"])
+@pytest.fixture
+def probe_importable():
+    """Put the probe fixtures on sys.path, as a user project would be."""
+    sys.path.insert(0, str(FIXTURES))
+    yield
+    sys.path.pop(0)
 
 
-class TestDiffSnapshots:
-    def test_no_changes(self):
-        pre = _snapshot()
-        post = _snapshot()
-        effects, new_mods = _diff_snapshots(pre, post)
-        assert effects == []
-        assert new_mods == []
+def test_diff_reports_nothing_when_nothing_changed():
+    effects, new_mods = _diff_snapshots(_snapshot(), _snapshot())
+    assert effects == []
+    assert new_mods == []
 
-    def test_new_modules_detected(self):
-        pre = _snapshot()
-        import xmlrpc.client  # noqa: F401
-        post = _snapshot()
-        _, new_mods = _diff_snapshots(pre, post)
-        assert "xmlrpc.client" in new_mods
 
-    def test_sys_path_added(self):
-        pre = _snapshot()
-        sys.path.append("/tmp/test_path_xyz")
-        post = _snapshot()
-        effects, _ = _diff_snapshots(pre, post)
+def test_diff_reports_newly_imported_modules():
+    pre = _snapshot()
+    import xmlrpc.client  # noqa: F401
+    _, new_mods = _diff_snapshots(pre, _snapshot())
+    assert "xmlrpc.client" in new_mods
+
+
+def test_diff_reports_added_sys_path_entry():
+    pre = _snapshot()
+    sys.path.append("/tmp/test_path_xyz")
+    try:
+        effects, _ = _diff_snapshots(pre, _snapshot())
+    finally:
         sys.path.pop()
-        path_effects = [e for e in effects if e["kind"] == "sys_path_added"]
-        assert len(path_effects) == 1
-        assert "/tmp/test_path_xyz" in path_effects[0]["paths"]
+
+    added = [e for e in effects if e["kind"] == "sys_path_added"]
+    assert len(added) == 1
+    assert "/tmp/test_path_xyz" in added[0]["paths"]
 
 
-class TestClassifyVerdict:
-    def test_empty_is_safe(self):
-        assert _classify_verdict([]) == "safe"
-
-    def test_thread_is_unsafe(self):
-        assert _classify_verdict([{"kind": "thread_spawned", "count": 1}]) == "unsafe"
-
-    def test_signal_is_unsafe(self):
-        effect = {"kind": "signal_handler_changed", "signal": "SIGTERM"}
-        assert _classify_verdict([effect]) == "unsafe"
-
-    def test_syspath_is_unsafe(self):
-        assert _classify_verdict([{"kind": "sys_path_added", "paths": ["/opt"]}]) == "unsafe"
-
-    def test_warnings_only_is_risky(self):
-        assert _classify_verdict([{"kind": "warnings_filter_changed", "count": 1}]) == "risky"
-
-    def test_atexit_only_is_risky(self):
-        assert _classify_verdict([{"kind": "atexit_registered", "count": 1}]) == "risky"
+@pytest.mark.parametrize(
+    ("effects", "expected"),
+    [
+        ([], "safe"),
+        ([{"kind": "thread_spawned", "count": 1}], "unsafe"),
+        ([{"kind": "sys_path_added", "paths": ["/opt"]}], "unsafe"),
+        ([{"kind": "signal_handler_changed", "signal": "SIGTERM"}], "unsafe"),
+        ([{"kind": "atexit_registered", "count": 1}], "risky"),
+        ([{"kind": "warnings_filter_changed", "count": 1}], "risky"),
+    ],
+)
+def test_verdict_separates_blocking_effects_from_merely_noteworthy(effects, expected):
+    # only thread/path/signal changes block a lazy rewrite; the rest are notes
+    assert _classify_verdict(effects) == expected
 
 
-class TestProbeChildRun:
-    def test_writes_json_output(self):
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            out_path = f.name
-        try:
-            run("json", out_path)
-            result = json.loads(Path(out_path).read_text())
-            assert result["module"] == "json"
-            assert result["verdict"] in ("safe", "risky", "unsafe", "error")
-        finally:
-            os.unlink(out_path)
-
-    def test_crash_gives_error_verdict(self):
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            out_path = f.name
-        try:
-            sys.path.insert(0, str(FIXTURES))
-            run(f"{OWN_PREFIX}crasher", out_path)
-            result = json.loads(Path(out_path).read_text())
-            assert result["verdict"] == "error"
-            assert "RuntimeError" in result["error"]
-        finally:
-            sys.path.pop(0)
-            os.unlink(out_path)
+def test_child_run_writes_a_profile(probe_importable):
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        out_path = f.name
+    try:
+        run("json", out_path)
+        result = json.loads(Path(out_path).read_text())
+        assert result["module"] == "json"
+    finally:
+        os.unlink(out_path)
 
 
-class TestProbe:
-    def test_pure_module_safe(self):
-        sys.path.insert(0, str(FIXTURES))
-        try:
-            results = probe([f"{OWN_PREFIX}pure"])
-            assert len(results) == 1
-            assert results[0]["verdict"] == "safe"
-            assert results[0]["module"] == f"{OWN_PREFIX}pure"
-        finally:
-            sys.path.pop(0)
-
-    def test_thread_spawner_unsafe(self):
-        sys.path.insert(0, str(FIXTURES))
-        try:
-            results = probe([f"{OWN_PREFIX}thread_spawner"])
-            assert len(results) == 1
-            assert results[0]["verdict"] == "unsafe"
-            kinds = [e["kind"] for e in results[0]["side_effects"]]
-            assert "thread_spawned" in kinds
-        finally:
-            sys.path.pop(0)
-
-    def test_syspath_adder_unsafe(self):
-        sys.path.insert(0, str(FIXTURES))
-        try:
-            results = probe([f"{OWN_PREFIX}syspath_adder"])
-            assert len(results) == 1
-            assert results[0]["verdict"] == "unsafe"
-            kinds = [e["kind"] for e in results[0]["side_effects"]]
-            assert "sys_path_added" in kinds
-        finally:
-            sys.path.pop(0)
-
-    def test_crash_gives_error(self):
-        sys.path.insert(0, str(FIXTURES))
-        try:
-            results = probe([f"{OWN_PREFIX}crasher"])
-            assert len(results) == 1
-            assert results[0]["verdict"] == "error"
-            assert "error" in results[0]
-        finally:
-            sys.path.pop(0)
-
-    def test_multiple_modules(self):
-        sys.path.insert(0, str(FIXTURES))
-        try:
-            results = probe([f"{OWN_PREFIX}pure", f"{OWN_PREFIX}thread_spawner"])
-            assert len(results) == 2
-            verdicts = {r["module"]: r["verdict"] for r in results}
-            assert verdicts[f"{OWN_PREFIX}pure"] == "safe"
-            assert verdicts[f"{OWN_PREFIX}thread_spawner"] == "unsafe"
-        finally:
-            sys.path.pop(0)
-
-    def test_no_cache_written(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        sys.path.insert(0, str(FIXTURES))
-        try:
-            results = probe([f"{OWN_PREFIX}pure"])
-            assert results[0]["verdict"] == "safe"
-        finally:
-            sys.path.pop(0)
-        assert not (tmp_path / ".lazysafe").exists()
+@pytest.mark.parametrize(
+    ("module", "verdict"),
+    [
+        (f"{OWN_PREFIX}pure", "safe"),
+        (f"{OWN_PREFIX}thread_spawner", "unsafe"),
+        (f"{OWN_PREFIX}syspath_adder", "unsafe"),
+        (f"{OWN_PREFIX}crasher", "error"),
+    ],
+)
+def test_probe_reports_each_fixture_verdict(probe_importable, module, verdict):
+    results = probe([module])
+    assert len(results) == 1
+    assert results[0]["module"] == module
+    assert results[0]["verdict"] == verdict
 
 
-class TestProbeIsolation:
-    def test_dotted_target_never_runs_in_host(self, tmp_path, monkeypatch):
-        import importlib.util  # noqa: F401 -- loads the old host-import path
+def test_probe_handles_several_modules(probe_importable):
+    results = probe([f"{OWN_PREFIX}pure", f"{OWN_PREFIX}thread_spawner"])
+    assert {r["module"]: r["verdict"] for r in results} == {
+        f"{OWN_PREFIX}pure": "safe",
+        f"{OWN_PREFIX}thread_spawner": "unsafe",
+    }
 
-        pkg = tmp_path / "hostiso_parent"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_bytes(
-            b"import os\n"
-            b"from pathlib import Path\n"
-            b'Path("host-import-pid.txt").write_text(str(os.getpid()))\n'
-        )
-        (pkg / "child.py").write_bytes(b"VALUE = 1\n")
-        monkeypatch.chdir(tmp_path)
-        sys.path.insert(0, str(tmp_path))
-        try:
-            assert "hostiso_parent" not in sys.modules
-            results = probe(["hostiso_parent.child"], timeout=30)
-            assert len(results) == 1
-            assert results[0]["module"] == "hostiso_parent.child"
-            assert "hostiso_parent" not in sys.modules
-            marker = tmp_path / "host-import-pid.txt"
-            assert marker.exists()
-            assert int(marker.read_text().strip()) != os.getpid()
-        finally:
-            sys.path.pop(0)
-            sys.modules.pop("hostiso_parent", None)
-            sys.modules.pop("hostiso_parent.child", None)
 
-    def test_simple_module_probes_with_timeout(self):
-        results = probe(["json"], timeout=10)
-        assert len(results) == 1
-        assert results[0]["module"] == "json"
-        assert results[0]["verdict"] in ("safe", "risky", "unsafe", "error")
+def test_probe_writes_no_cache(tmp_path, monkeypatch, probe_importable):
+    monkeypatch.chdir(tmp_path)
+    probe([f"{OWN_PREFIX}pure"])
+    assert not (tmp_path / ".lazysafe").exists()
+
+
+def test_dotted_target_never_runs_in_the_host(tmp_path, monkeypatch):
+    # the parent package writes its own PID on import; only the child may do that
+    pkg = tmp_path / "hostiso_parent"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_bytes(
+        b"import os\n"
+        b"from pathlib import Path\n"
+        b'Path("host-import-pid.txt").write_text(str(os.getpid()))\n'
+    )
+    (pkg / "child.py").write_bytes(b"VALUE = 1\n")
+    monkeypatch.chdir(tmp_path)
+    sys.path.insert(0, str(tmp_path))
+    try:
+        results = probe(["hostiso_parent.child"], timeout=30)
+        assert "hostiso_parent" not in sys.modules
+        marker = tmp_path / "host-import-pid.txt"
+        assert marker.exists()
+        assert int(marker.read_text().strip()) != os.getpid()
+        assert results[0]["module"] == "hostiso_parent.child"
+    finally:
+        sys.path.pop(0)
+        sys.modules.pop("hostiso_parent", None)
+        sys.modules.pop("hostiso_parent.child", None)

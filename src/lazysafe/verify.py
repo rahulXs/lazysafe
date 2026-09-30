@@ -30,17 +30,14 @@ class VerifyResult:
     diffs: list[str]
 
 
-def _normalize(text: str, patterns: list[tuple[str, str]] | None = None) -> str:
+def _normalize(text, patterns=None):
     result = text
     for pattern, replacement in (patterns or _DEFAULT_NORMALIZATIONS):
         result = re.sub(pattern, replacement, result)
     return result
 
 
-def _run_command(
-    command: list[str], python: str, lazy: bool = False, timeout: float = 300
-) -> RunResult:
-    env = {**__import__("os").environ}
+def _run_command(command, python, lazy=False, timeout=300):
     args = [python]
 
     if lazy:
@@ -54,7 +51,6 @@ def _run_command(
             capture_output=True,
             text=True,
             timeout=timeout,
-            env=env,
         )
         return RunResult(
             exit_code=result.returncode,
@@ -67,12 +63,7 @@ def _run_command(
         return RunResult(exit_code=-2, stdout="", stderr=f"python not found: {python}")
 
 
-def verify(
-    command: list[str],
-    *,
-    python: str | None = None,
-    lazy_python: str | None = None,
-) -> VerifyResult:
+def verify(command, *, python=None, lazy_python=None):
     exe = python or sys.executable
     lazy_exe = lazy_python or exe
 
