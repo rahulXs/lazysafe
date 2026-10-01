@@ -1,23 +1,24 @@
-"""verify behavioral equivalence between eager and lazy modes."""
+"""compare one command's behaviour with and without process-wide lazy imports.
 
-import re
+This is an experiment on a whole interpreter, not a check of a source edit.
+Both runs must succeed, the interpreter must really defer imports, and output is
+compared exactly: no normalization, so two runs that merely look alike cannot
+pass. Nothing here proves a lazy import rewrite is safe.
+"""
+
 import subprocess
 import sys
 from dataclasses import dataclass
 
-_DEFAULT_NORMALIZATIONS = [
-    (r"\d+\.\d+ms", "Xms"),
-    (r"\d+\.\d+s", "Xs"),
-    (r"/tmp/[^\s]+", "TMP_PATH"),
-    (r"C:\\[^\s]+", "WIN_PATH"),
-    (r"0x[0-9a-f]+", "0xADDR"),
-    (r"running on Python \d+\.\d+\.\d+", "running on Python X.Y.Z"),
-]
+from lazysafe.capability import lazy_support
+
+_TIMEOUT_S = 300
 
 
 @dataclass
 class RunResult:
-    exit_code: int
+    # None means the child never produced an exit code: it failed to start or timed out
+    exit_code: int | None
     stdout: str
     stderr: str
 
@@ -28,16 +29,10 @@ class VerifyResult:
     eager: RunResult
     lazy: RunResult
     diffs: list[str]
+    error: str = ""
 
 
-def _normalize(text, patterns=None):
-    result = text
-    for pattern, replacement in (patterns or _DEFAULT_NORMALIZATIONS):
-        result = re.sub(pattern, replacement, result)
-    return result
-
-
-def _run_command(command, python, lazy=False, timeout=300):
+def _run_command(command, python, lazy=False, timeout=_TIMEOUT_S):
     args = [python]
 
     if lazy:
@@ -46,49 +41,73 @@ def _run_command(command, python, lazy=False, timeout=300):
     args.extend(command)
 
     try:
-        result = subprocess.run(
+        run = subprocess.run(
             args,
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
-        return RunResult(
-            exit_code=result.returncode,
-            stdout=result.stdout,
-            stderr=result.stderr,
-        )
-    except subprocess.TimeoutExpired:
-        return RunResult(exit_code=-1, stdout="", stderr="timeout")
     except FileNotFoundError:
-        return RunResult(exit_code=-2, stdout="", stderr=f"python not found: {python}")
+        return RunResult(exit_code=None, stdout="", stderr="interpreter not found")
+    except subprocess.TimeoutExpired:
+        return RunResult(exit_code=None, stdout="", stderr="timed out")
+    except OSError as exc:
+        return RunResult(exit_code=None, stdout="", stderr=str(exc))
+
+    return RunResult(
+        exit_code=run.returncode,
+        stdout=run.stdout,
+        stderr=run.stderr,
+    )
 
 
-def verify(command, *, python=None, lazy_python=None):
+def verify(command, *, python=None, lazy_python=None, timeout=_TIMEOUT_S):
     exe = python or sys.executable
     lazy_exe = lazy_python or exe
 
-    eager = _run_command(command, exe, lazy=False)
-    lazy = _run_command(command, lazy_exe, lazy=True)
+    ok, reason = lazy_support(lazy_exe)
+    if not ok:
+        return VerifyResult(
+            equivalent=False,
+            eager=RunResult(None, "", ""),
+            lazy=RunResult(None, "", ""),
+            diffs=[],
+            error=reason,
+        )
+
+    eager = _run_command(command, exe, lazy=False, timeout=timeout)
+    lazy = _run_command(command, lazy_exe, lazy=True, timeout=timeout)
+
+    for name, side in (("eager", eager), ("lazy", lazy)):
+        if side.exit_code is None:
+            return VerifyResult(
+                equivalent=False,
+                eager=eager,
+                lazy=lazy,
+                diffs=[],
+                error=f"the {name} run did not complete: {side.stderr}",
+            )
+        if side.exit_code != 0:
+            return VerifyResult(
+                equivalent=False,
+                eager=eager,
+                lazy=lazy,
+                diffs=[],
+                error=f"the {name} run exited {side.exit_code}; "
+                "a comparison needs both runs to succeed",
+            )
 
     diffs = []
 
-    if eager.exit_code != lazy.exit_code:
-        diffs.append(
-            f"exit code: eager={eager.exit_code} lazy={lazy.exit_code}"
-        )
+    if eager.stdout != lazy.stdout:
+        diffs.append("stdout differs")
 
-    norm_eager_stdout = _normalize(eager.stdout)
-    norm_lazy_stdout = _normalize(lazy.stdout)
-    if norm_eager_stdout != norm_lazy_stdout:
-        diffs.append("stdout differs after normalization")
-
-    norm_eager_stderr = _normalize(eager.stderr)
-    norm_lazy_stderr = _normalize(lazy.stderr)
-    if norm_eager_stderr != norm_lazy_stderr:
-        diffs.append("stderr differs after normalization")
+    if eager.stderr != lazy.stderr:
+        diffs.append("stderr differs")
 
     return VerifyResult(
-        equivalent=len(diffs) == 0,
+        equivalent=not diffs,
         eager=eager,
         lazy=lazy,
         diffs=diffs,

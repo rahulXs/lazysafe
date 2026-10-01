@@ -293,6 +293,12 @@ def _cmd_verify(args):
         lazy_python=args.lazy_python,
     )
 
+    if result.error:
+        print(f"  error: {result.error}\n", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"equivalent": False, "error": result.error}, indent=2))
+        sys.exit(2)
+
     if args.json:
         print(json.dumps({
             "equivalent": result.equivalent,
@@ -302,7 +308,9 @@ def _cmd_verify(args):
         }, indent=2))
     else:
         status = "EQUIVALENT" if result.equivalent else "DIVERGENT"
-        print(f"\n  verdict: {status}")
+        print("\n  experimental: compares one command under two interpreter-wide")
+        print("  modes. it does not check a source edit.\n")
+        print(f"  verdict: {status}")
         print(f"  eager exit: {result.eager.exit_code}")
         print(f"  lazy exit:  {result.lazy.exit_code}")
 
@@ -364,7 +372,10 @@ def main(argv=None):
     p_apply.add_argument("--include-unsafe", action="store_true",
                          help="also rewrite RISKY/UNSAFE modules")
 
-    p_verify = sub.add_parser("verify", help="verify eager vs lazy equivalence")
+    p_verify = sub.add_parser(
+        "verify",
+        help="experimental: compare one command eager vs lazy (not a source-edit check)",
+    )
     p_verify.add_argument("command_to_run", nargs="+", help="command to verify")
     p_verify.add_argument("--python", help="python interpreter for eager mode")
     p_verify.add_argument("--lazy-python", help="python 3.15+ for lazy mode")

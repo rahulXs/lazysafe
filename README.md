@@ -29,7 +29,7 @@ lazysafe analyze src/
 lazysafe analyze src/ --all
 
 # measure import-profile data (not command duration)
-lazysafe measure --runs 3 -- python -m myapp
+lazysafe measure --runs 3 -- -m myapp
 
 # probe modules for runtime side effects
 # NOTE: probing imports the target in a child process running with your
@@ -42,9 +42,33 @@ lazysafe apply src/ --dry-run
 # files. source writes stay disabled until verified backup, transaction, and
 # recovery support is available.
 
-# verify eager vs lazy equivalence
-lazysafe verify -- python -m pytest -q
+# compare one command eager vs lazy (experimental)
+lazysafe verify -- -m pytest -q
+# NOTE: arguments after `--` go to the interpreter, so this runs
+# `python -m pytest -q` twice. `lazysafe verify -- python -m pytest -q`
+# does NOT work: it asks python to run a file named "python".
 ```
+
+### what verify does and does not do
+
+`verify` runs one command twice under the same interpreter, once with
+`-X lazy_imports=all`, and compares the output byte for byte.
+
+it refuses to report a comparison unless:
+
+- the selected interpreter really defers imports. python 3.14 accepts
+  `-X lazy_imports=all` and then imports eagerly anyway, so lazysafe checks
+  observed behaviour rather than trusting the flag or the version
+- both runs exit zero. two runs that both fail the same way are a broken
+  command, not a working migration
+
+output is compared exactly, with no normalization, so two runs that merely look
+similar are reported as different.
+
+this is an experiment on a whole interpreter. it does **not** check that a
+specific `lazy import` edit is safe for your code, and it cannot be used to
+authorize an automatic rewrite. it exits 2 when no comparison is possible and 1
+when the runs disagree.
 
 ## what it does
 
