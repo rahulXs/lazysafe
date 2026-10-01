@@ -14,6 +14,12 @@ needs_native = pytest.mark.skipif(
     not CAPABLE, reason="host interpreter does not defer imports"
 )
 
+needs_incapable_host = pytest.mark.skipif(
+    CAPABLE, reason="needs a host older than 3.15, which imports eagerly"
+)
+
+NO_SUCH_PYTHON = "lazysafe-no-such-interpreter-xyz"
+
 
 def _verify_cli(*argv):
     with pytest.raises(SystemExit) as exc_info:
@@ -21,16 +27,17 @@ def _verify_cli(*argv):
     return exc_info.value.code
 
 
-def test_capability_check_rejects_a_non_defining_interpreter():
-    # 3.14 accepts -X lazy_imports=all and still imports eagerly (LS-02)
-    ok, reason = lazy_support("/usr/bin/python3.14")
-    if ok:
-        pytest.skip("python3.14 on this host defers imports, which is unexpected")
+@needs_incapable_host
+def test_capability_check_rejects_an_interpreter_that_does_not_defer():
+    # on this host -X lazy_imports=all is accepted and then ignored (LS-02),
+    # so the interpreter under test is the one running the suite
+    ok, reason = lazy_support(sys.executable)
+    assert ok is False
     assert "does not defer imports" in reason
 
 
 def test_capability_check_rejects_a_missing_interpreter():
-    ok, reason = lazy_support("/nonexistent/python-xyz")
+    ok, reason = lazy_support(NO_SUCH_PYTHON)
     assert ok is False
     assert "not found" in reason
 
@@ -46,16 +53,15 @@ def test_two_equal_failures_are_not_equivalent():
 
 @needs_native
 def test_missing_interpreter_is_not_equivalent():
-    result = verify(["-c", "pass"], python="/nonexistent/python-xyz")
+    result = verify(["-c", "pass"], python=NO_SUCH_PYTHON)
     assert result.equivalent is False
     assert "not found" in result.error
 
 
+@needs_incapable_host
 def test_incapable_interpreter_is_rejected_before_running_anything():
     # the command would succeed eagerly; it must not be claimed as verified
-    result = verify(["-c", "pass"], lazy_python="/usr/bin/python3.14")
-    if result.equivalent:
-        pytest.skip("python3.14 on this host defers imports, which is unexpected")
+    result = verify(["-c", "pass"], lazy_python=sys.executable)
     assert "does not defer imports" in result.error
     assert result.eager.exit_code is None
     assert result.lazy.exit_code is None
