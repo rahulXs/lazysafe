@@ -70,18 +70,22 @@ def _plan_file(model, file_path, source, tree, safe_only):
                 old_line = _get_line(source, stmt.lineno)
                 new_line = _make_lazy_line(old_line, module)
                 if new_line != old_line:
-                    rewrites.append(ImportRewrite(
-                        module=module,
-                        lineno=stmt.lineno,
-                        old_line=old_line,
-                        new_line=new_line,
-                    ))
+                    rewrites.append(
+                        ImportRewrite(
+                            module=module,
+                            lineno=stmt.lineno,
+                            old_line=old_line,
+                            new_line=new_line,
+                        )
+                    )
             elif safe_only:
-                skipped.append(SkippedImport(
-                    module=module,
-                    file=file_path,
-                    reason=f"classified as {classification}",
-                ))
+                skipped.append(
+                    SkippedImport(
+                        module=module,
+                        file=file_path,
+                        reason=f"classified as {classification}",
+                    )
+                )
 
     changes = [FileChange(path=file_path, rewrites=rewrites)] if rewrites else []
     return Plan(changes=changes, skipped=skipped)
@@ -107,7 +111,7 @@ def _make_lazy_line(line, module):
     if not stripped.startswith("import "):
         return line
 
-    if stripped[len("import "):].strip() != module:
+    if stripped[len("import ") :].strip() != module:
         return line
 
     indent = line[: len(line) - len(stripped)]

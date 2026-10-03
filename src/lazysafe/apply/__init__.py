@@ -1,1 +1,1 @@
-"""apply package - rewrite engine for lazy imports."""
+"""apply package - plans lazy import rewrites. preview only; it never writes."""

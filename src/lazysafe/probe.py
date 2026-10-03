@@ -27,10 +27,7 @@ def _error_profile(module, error, duration_ms=0):
 def _probe_module(module, python, timeout):
     out_path = Path(tempfile.gettempdir()) / f"lazysafe_probe_{module.replace('.', '_')}.json"
     out_posix = out_path.as_posix()
-    child_script = (
-        f"from lazysafe._probe_child import run; "
-        f"run('{module}', '{out_posix}')"
-    )
+    child_script = f"from lazysafe._probe_child import run; run('{module}', '{out_posix}')"
 
     src_dir = str(Path(__file__).parent.parent)
     path_dirs = [src_dir] + [p for p in sys.path if p and Path(p).is_dir()]
@@ -49,9 +46,7 @@ def _probe_module(module, python, timeout):
         )
         duration_ms = (time.monotonic() - start) * 1000
     except subprocess.TimeoutExpired:
-        return _error_profile(
-            module, f"probe timed out after {timeout}s", timeout * 1000
-        )
+        return _error_profile(module, f"probe timed out after {timeout}s", timeout * 1000)
     except FileNotFoundError:
         return _error_profile(module, f"python not found: {python}")
 

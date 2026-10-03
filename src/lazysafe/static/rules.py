@@ -38,9 +38,7 @@ def _check_se01(tree):
     for node in ast.iter_child_nodes(tree):
         is_call = isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
         if is_call and not _is_pure_builtin_call(node.value):
-            findings.append(
-                _make_finding("SE01", node.lineno, ast.dump(node.value.func), 0.6)
-            )
+            findings.append(_make_finding("SE01", node.lineno, ast.dump(node.value.func), 0.6))
 
     return findings
 
@@ -51,19 +49,15 @@ def _check_se02(tree):
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                is_foreign = (
-                    isinstance(target, ast.Attribute)
-                    and isinstance(target.value, ast.Name)
+                is_foreign = isinstance(target, ast.Attribute) and isinstance(
+                    target.value, ast.Name
                 )
                 if is_foreign:
                     evidence = f"{target.value.id}.{target.attr}"
                     findings.append(_make_finding("SE02", node.lineno, evidence, 0.9))
         elif isinstance(node, ast.AugAssign):
             target = node.target
-            is_foreign = (
-                isinstance(target, ast.Attribute)
-                and isinstance(target.value, ast.Name)
-            )
+            is_foreign = isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
             if is_foreign:
                 evidence = f"{target.value.id}.{target.attr}"
                 findings.append(_make_finding("SE02", node.lineno, evidence, 0.9))
@@ -98,9 +92,7 @@ def _check_se03(tree):
                 evidence = f"sys.{attr}[...]"
                 findings.append(_make_finding("SE03", node.lineno, evidence, 0.95))
             elif obj_id == "os" and attr == "environ":
-                findings.append(
-                    _make_finding("SE03", node.lineno, "os.environ[...]", 0.95)
-                )
+                findings.append(_make_finding("SE03", node.lineno, "os.environ[...]", 0.95))
 
     return findings
 
@@ -121,17 +113,11 @@ def _check_se04(tree):
             continue
 
         if obj.id == "atexit" and attr == "register":
-            findings.append(
-                _make_finding("SE04", node.lineno, "atexit.register(...)", 0.9)
-            )
+            findings.append(_make_finding("SE04", node.lineno, "atexit.register(...)", 0.9))
         elif obj.id == "signal" and attr == "signal":
-            findings.append(
-                _make_finding("SE04", node.lineno, "signal.signal(...)", 0.9)
-            )
+            findings.append(_make_finding("SE04", node.lineno, "signal.signal(...)", 0.9))
         elif obj.id == "logging" and attr in _LOGGING_ATTRS:
-            findings.append(
-                _make_finding("SE04", node.lineno, f"logging.{attr}(...)", 0.85)
-            )
+            findings.append(_make_finding("SE04", node.lineno, f"logging.{attr}(...)", 0.85))
 
     return findings
 
@@ -160,9 +146,7 @@ def _check_se05(tree):
                     and item.context_expr.func.id == "open"
                 )
                 if is_open:
-                    findings.append(
-                        _make_finding("SE05", node.lineno, "open(...)", 0.8)
-                    )
+                    findings.append(_make_finding("SE05", node.lineno, "open(...)", 0.8))
 
     return findings
 
@@ -176,17 +160,12 @@ def _check_se06(tree):
             continue
         for dec in node.decorator_list:
             is_attr = isinstance(dec, ast.Attribute)
-            is_call_attr = (
-                isinstance(dec, ast.Call)
-                and isinstance(dec.func, ast.Attribute)
-            )
+            is_call_attr = isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute)
             if is_attr or is_call_attr:
                 count += 1
 
     if count >= 2:
-        findings.append(
-            _make_finding("SE06", 1, f"{count} registration decorators", 0.5)
-        )
+        findings.append(_make_finding("SE06", 1, f"{count} registration decorators", 0.5))
 
     return findings
 
@@ -199,11 +178,7 @@ def _check_se07(tree):
             isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
         )
         if has_call and _is_importlib_import(node.value):
-            findings.append(
-                _make_finding(
-                    "SE07", node.lineno, "importlib.import_module(...)", 0.9
-                )
-            )
+            findings.append(_make_finding("SE07", node.lineno, "importlib.import_module(...)", 0.9))
 
     return findings
 
@@ -231,8 +206,7 @@ def _check_se08(tree):
                 continue
 
             has_patch = any(
-                isinstance(stmt, (ast.Assign, ast.Expr))
-                for stmt in ast.iter_child_nodes(handler)
+                isinstance(stmt, (ast.Assign, ast.Expr)) for stmt in ast.iter_child_nodes(handler)
             )
             if has_patch:
                 findings.append(

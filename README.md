@@ -5,8 +5,7 @@ safely adopt python 3.15 lazy imports.
 ## why it exists
 
 python 3.15 ships [PEP 810](https://peps.python.org/pep-0810/) explicit lazy
-imports. `lazy import json` defers loading until first use. reported wins: ~2.9x
-faster startup for import-heavy applications.
+imports. `lazy import json` defers loading until first use.
 
 the catch: laziness changes *when* import-time side effects run. some libraries
 depend on them. under lazy mode, programs break in confusing ways.
@@ -70,14 +69,20 @@ specific `lazy import` edit is safe for your code, and it cannot be used to
 authorize an automatic rewrite. it exits 2 when no comparison is possible and 1
 when the runs disagree.
 
+### configuration
+
+`analyze` and `apply` read `lazysafe.toml` from the current directory when it
+exists, for `targets`, `measure_runs`, and `measure_warmup`. an unknown key is
+an error. the `allowlist` key is accepted but has no effect yet.
+
 ## what it does
 
-lazysafe scans your Python source files and classifies every import statement
+lazysafe scans your Python source files and classifies each **top-level** import
 by its side-effect risk:
 
 | finding | meaning | action |
 |---------|---------|--------|
-| SAFE | no side effects detected | safe to make lazy |
+| SAFE | no side effects detected | good candidate to make lazy |
 | RISKY | might have side effects | investigate before lazy |
 | UNSAFE | side effect detected | keep eager |
 | UNKNOWN | can't determine statically | needs further investigation |
@@ -95,11 +100,29 @@ by its side-effect risk:
 | SE07 | importlib.import_module with computed names | 0.9 |
 | SE08 | try/except ImportError with fallback patches | 0.7 |
 
+### known gaps in the analyzer
+
+`SAFE` means **no rule matched**, not that a module is side-effect free. These
+forms currently produce no finding and can be reported SAFE while running code
+at import:
+
+- the result of a call assigned to a name, such as `token = atexit.register(...)`
+- calls inside a class body, which run when the class is created
+- mutations inside a module-level `if`, `try`, or loop
+- a single registration decorator (SE06 only fires on two or more)
+- a module that imports a module with side effects and inherits none of its
+  findings
+
+nested and function-level imports are not collected at all. treat a SAFE result
+as a place to start reading, not as permission to rewrite automatically.
+`lazysafe apply` never writes files for exactly this reason.
+
 ## what it does not do
 
 - runtime lazy-loading for older pythons (no backport of PEP 810)
 - patching third-party packages' code
 - general linting/formatting (use [ruff](https://docs.astral.sh/ruff/))
+- modify your source files. `apply` previews only, and cannot be made to write
 
 ## requirements
 

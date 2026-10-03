@@ -1,4 +1,5 @@
 """module that spawns a thread."""
+
 import threading
 import time
 

@@ -1,4 +1,4 @@
-"""configuration loading and merging."""
+"""load lazysafe.toml."""
 
 import tomllib
 from dataclasses import dataclass, field

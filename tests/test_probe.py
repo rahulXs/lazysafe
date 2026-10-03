@@ -32,6 +32,7 @@ def test_diff_reports_nothing_when_nothing_changed():
 def test_diff_reports_newly_imported_modules():
     pre = _snapshot()
     import xmlrpc.client  # noqa: F401
+
     _, new_mods = _diff_snapshots(pre, _snapshot())
     assert "xmlrpc.client" in new_mods
 

@@ -101,9 +101,7 @@ def _print_analysis_table(report, args):
         if cls == "safe" and not args.all:
             continue
 
-        symbol = {"safe": "+", "risky": "?", "unsafe": "!", "unknown": "?"}.get(
-            cls, "?"
-        )
+        symbol = {"safe": "+", "risky": "?", "unsafe": "!", "unknown": "?"}.get(cls, "?")
         imports = mod["imports_top_level"]
         import_str = f" ({len(imports)} imports)" if imports else ""
         print(f"  {symbol} {mod['module']} ({mod['origin']}) [{cls}]{import_str}")
@@ -160,8 +158,8 @@ def _cmd_measure(args):
         stats = report["total_ms"]
         print(f"\n  command: {' '.join(report['entry_command'])}")
         print(f"  python:  {report['interpreter']}")
-        warmup = report['runs']['warmup']
-        measured = report['runs']['measured']
+        warmup = report["runs"]["warmup"]
+        measured = report["runs"]["measured"]
         print(f"  runs:    {warmup} warmup + {measured} measured")
         print("  metric:  import-profile data (-X importtime), not command duration\n")
         print(f"  p50:     {stats['p50']}ms")
@@ -172,8 +170,8 @@ def _cmd_measure(args):
         if report["per_module_top"]:
             print("\n  top modules:")
             for mod in report["per_module_top"][:10]:
-                cum = mod['cumulative_ms']
-                self_ms = mod['self_ms']
+                cum = mod["cumulative_ms"]
+                self_ms = mod["self_ms"]
                 print(f"    {mod['module']:40s} {cum:>8.1f}ms (self {self_ms:.1f}ms)")
 
         print()
@@ -192,9 +190,7 @@ _EFFECT_LABELS = {
 
 def _print_probe_profile(profile):
     verdict = profile["verdict"]
-    symbol = {"safe": "+", "risky": "?", "unsafe": "!", "error": "x"}.get(
-        verdict, "?"
-    )
+    symbol = {"safe": "+", "risky": "?", "unsafe": "!", "error": "x"}.get(verdict, "?")
     duration = profile.get("duration_ms", 0)
     effects = profile.get("side_effects", [])
 
@@ -300,12 +296,17 @@ def _cmd_verify(args):
         sys.exit(2)
 
     if args.json:
-        print(json.dumps({
-            "equivalent": result.equivalent,
-            "eager_exit": result.eager.exit_code,
-            "lazy_exit": result.lazy.exit_code,
-            "diffs": result.diffs,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "equivalent": result.equivalent,
+                    "eager_exit": result.eager.exit_code,
+                    "lazy_exit": result.lazy.exit_code,
+                    "diffs": result.diffs,
+                },
+                indent=2,
+            )
+        )
     else:
         status = "EQUIVALENT" if result.equivalent else "DIVERGENT"
         print("\n  experimental: compares one command under two interpreter-wide")
@@ -329,17 +330,13 @@ def main(argv=None):
         prog="lazysafe",
         description="safely adopt python 3.15 lazy imports.",
     )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command")
 
     p_analyze = sub.add_parser("analyze", help="analyze imports for side effects")
     p_analyze.add_argument("targets", nargs="*", help="directories to scan")
     p_analyze.add_argument("--json", action="store_true", help="output as JSON")
-    p_analyze.add_argument(
-        "--all", action="store_true", help="show safe modules too"
-    )
+    p_analyze.add_argument("--all", action="store_true", help="show safe modules too")
 
     p_measure = sub.add_parser("measure", help="measure import-profile timing")
     p_measure.add_argument("entry_command", nargs="+", help="command to measure")
@@ -367,10 +364,9 @@ def main(argv=None):
         action="store_true",
         help="show preview without writing (writes are disabled in this release)",
     )
-    p_apply.add_argument("--safe-only", action="store_true", default=True,
-                         help="only rewrite SAFE modules (default)")
-    p_apply.add_argument("--include-unsafe", action="store_true",
-                         help="also rewrite RISKY/UNSAFE modules")
+    p_apply.add_argument(
+        "--include-unsafe", action="store_true", help="also rewrite RISKY/UNSAFE modules"
+    )
 
     p_verify = sub.add_parser(
         "verify",

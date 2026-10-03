@@ -10,9 +10,7 @@ from lazysafe.verify import verify
 
 CAPABLE = lazy_support(sys.executable)[0]
 
-needs_native = pytest.mark.skipif(
-    not CAPABLE, reason="host interpreter does not defer imports"
-)
+needs_native = pytest.mark.skipif(not CAPABLE, reason="host interpreter does not defer imports")
 
 needs_incapable_host = pytest.mark.skipif(
     CAPABLE, reason="needs a host older than 3.15, which imports eagerly"
@@ -77,11 +75,13 @@ def test_timeout_is_an_error_not_a_comparison():
 @needs_native
 def test_different_temporary_paths_stay_different():
     # exact comparison only. these two paths used to normalize to the same text
-    result = verify([
-        "-c",
-        "import os, tempfile; "
-        "print(os.path.join(tempfile.gettempdir(), 'a' + os.urandom(4).hex()))",
-    ])
+    result = verify(
+        [
+            "-c",
+            "import os, tempfile; "
+            "print(os.path.join(tempfile.gettempdir(), 'a' + os.urandom(4).hex()))",
+        ]
+    )
     assert result.equivalent is False
     assert "stdout differs" in result.diffs
 

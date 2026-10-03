@@ -18,8 +18,7 @@ def write_analysis_report(model, targets, duration_ms):
             "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "duration_ms": round(duration_ms, 1),
             "host_python": (
-                f"{sys.version_info.major}.{sys.version_info.minor}"
-                f".{sys.version_info.micro}"
+                f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
             ),
             "targets": targets,
         },

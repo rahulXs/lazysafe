@@ -27,6 +27,7 @@ jobs:
       - run: uv sync
       - run: uv run pytest -q
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
 
   # Required native qualification. This job must fail rather than skip when the
   # selected 3.15 build cannot actually defer an explicit lazy import, so it is
@@ -59,3 +60,4 @@ jobs:
         env:
           LAZYSAFE_REQUIRE_NATIVE_LAZY: "1"
       - run: uv run ruff check .
+      - run: uv run ruff format --check .

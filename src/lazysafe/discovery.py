@@ -64,9 +64,7 @@ def _extract_imports_from_handler(handler):
         elif isinstance(stmt, ast.ImportFrom):
             mod = stmt.module or ""
             names = [a.name for a in stmt.names]
-            imports.append(
-                _make_import(mod, names, stmt.lineno, is_try_except=True)
-            )
+            imports.append(_make_import(mod, names, stmt.lineno, is_try_except=True))
 
     return imports
 
@@ -89,9 +87,7 @@ def _extract_imports(tree):
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                imports.append(
-                    _make_import(alias.name, [alias.asname or alias.name], node.lineno)
-                )
+                imports.append(_make_import(alias.name, [alias.asname or alias.name], node.lineno))
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             names = [alias.name for alias in node.names]

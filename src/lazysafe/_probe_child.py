@@ -59,10 +59,12 @@ def _diff_snapshots(pre, post):
         effects.append({"kind": "thread_spawned", "count": len(new_threads)})
 
     if post["atexit_count"] > pre["atexit_count"]:
-        effects.append({
-            "kind": "atexit_registered",
-            "count": post["atexit_count"] - pre["atexit_count"],
-        })
+        effects.append(
+            {
+                "kind": "atexit_registered",
+                "count": post["atexit_count"] - pre["atexit_count"],
+            }
+        )
 
     for sig_name, post_val in post["signal_handlers"].items():
         pre_val = pre["signal_handlers"].get(sig_name)
@@ -76,11 +78,13 @@ def _diff_snapshots(pre, post):
     added_env = sorted(set(post["env_keys"]) - set(pre["env_keys"]))
     removed_env = sorted(set(pre["env_keys"]) - set(post["env_keys"]))
     if added_env or removed_env:
-        effects.append({
-            "kind": "env_changed",
-            "added": added_env,
-            "removed": removed_env,
-        })
+        effects.append(
+            {
+                "kind": "env_changed",
+                "added": added_env,
+                "removed": removed_env,
+            }
+        )
 
     if post["cwd"] != pre["cwd"]:
         effects.append({"kind": "cwd_changed", "from": pre["cwd"], "to": post["cwd"]})
@@ -88,16 +92,20 @@ def _diff_snapshots(pre, post):
     pre_fd = pre.get("fd_count")
     post_fd = post.get("fd_count")
     if pre_fd is not None and post_fd is not None and post_fd > pre_fd + 2:
-        effects.append({
-            "kind": "fds_opened",
-            "count": post_fd - pre_fd,
-        })
+        effects.append(
+            {
+                "kind": "fds_opened",
+                "count": post_fd - pre_fd,
+            }
+        )
 
     if post["warnings_filters"] != pre["warnings_filters"]:
-        effects.append({
-            "kind": "warnings_filter_changed",
-            "count": post["warnings_filters"] - pre["warnings_filters"],
-        })
+        effects.append(
+            {
+                "kind": "warnings_filter_changed",
+                "count": post["warnings_filters"] - pre["warnings_filters"],
+            }
+        )
 
     return effects, new_mods
 

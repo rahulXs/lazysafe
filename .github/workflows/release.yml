@@ -5,13 +5,39 @@ on:
     tags: ["v*"]
 
 jobs:
+  # A tag push does not trigger the CI workflow, so the release gate runs here.
+  # Nothing is built or published until these pass on the tagged revision.
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.15"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync
+      - name: report interpreter build
+        run: uv run python -VV
+      - name: tests
+        run: uv run pytest -q
+        env:
+          LAZYSAFE_REQUIRE_NATIVE_LAZY: ${{ matrix.python == '3.15' && '1' || '' }}
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
   build:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.15"
       - run: uv build
-      - run: uv run twine check dist/*
+      - run: uv run twine check --strict dist/*
       - uses: actions/upload-artifact@v4
         with:
           name: dist

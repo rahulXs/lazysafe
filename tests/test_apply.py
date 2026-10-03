@@ -1,10 +1,7 @@
-"""tests for apply planning and backup."""
+"""tests for apply planning."""
 
 from pathlib import Path
 
-import pytest
-
-from lazysafe.apply.backup import create_backup, restore
 from lazysafe.apply.plan import _make_lazy_line, plan_keyword
 from lazysafe.discovery import scan_directory
 from lazysafe.static import run_static
@@ -45,24 +42,3 @@ def test_plan_rewrites_safe_imports_and_skips_others(tmp_path, monkeypatch):
 
     assert {r.module for c in plan.changes for r in c.rewrites} == {"safe_dep"}
     assert "unsafe_dep" in {s.module for s in plan.skipped}
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="LS-08: create_backup does relative_to on an already-relative path. "
-    "M13.2 rebuilds backups; drop this marker when it passes.",
-)
-def test_backup_and_restore_returns_original_bytes(tmp_path, monkeypatch):
-    _write_apply_fixture(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    original = (tmp_path / "consumer.py").read_bytes()
-
-    plan = _plan_for(tmp_path)
-    assert plan.changes
-
-    backup_path = create_backup(plan, tmp_path)
-    for change in plan.changes:
-        change.path.write_bytes(b"lazy import safe_dep\n")
-
-    restore(backup_path, plan, tmp_path)
-    assert (tmp_path / "consumer.py").read_bytes() == original
