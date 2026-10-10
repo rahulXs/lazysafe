@@ -219,6 +219,9 @@ class TestLiteralArgv:
         assert "import-profile data" in capsys.readouterr().out
 
     def test_unicode_arguments_survive(self, capsys):
+        # the child prints unicode_escape so its own output is ASCII anywhere: a
+        # piped stdout on windows uses the local code page, and what this test
+        # checks is the argument surviving the argv boundary
         main(
             [
                 "measure",
@@ -229,7 +232,7 @@ class TestLiteralArgv:
                 "--",
                 PY,
                 "-c",
-                "import sys; print(sys.argv[1])",
+                "import sys; print(sys.argv[1].encode('unicode_escape').decode())",
                 "héllo → ✓",
             ]
         )
