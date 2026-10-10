@@ -1,5 +1,7 @@
 """tests for import-profile timing measurement."""
 
+import sys
+
 import pytest
 
 import lazysafe.measure as measure_module
@@ -8,6 +10,9 @@ from lazysafe.measure import (
     measure,
     result_to_dict,
 )
+
+PY = sys.executable
+IMPORT_JSON = [PY, "-c", "import json"]
 
 
 def test_parse_importtime_line():
@@ -28,8 +33,8 @@ def test_parse_importtime_line_non_import():
 
 
 def test_measure_runs_successfully():
-    result = measure(["json"], runs=2, warmup=1)
-    assert result.entry_command == ["json"]
+    result = measure(IMPORT_JSON, runs=2, warmup=1)
+    assert result.entry_command == IMPORT_JSON
     assert result.ok is True
     assert result.errors == []
     assert result.runs == {"warmup": 1, "measured": 2, "succeeded": 3, "failed": 0}
@@ -41,31 +46,31 @@ def test_measure_runs_successfully():
 @pytest.mark.parametrize("budget_ms", [0.001, 999999])
 def test_measure_rejects_any_budget(budget_ms):
     with pytest.raises(ValueError, match="budget gating is unavailable"):
-        measure(["json"], runs=2, warmup=1, budget_ms=budget_ms)
+        measure(IMPORT_JSON, runs=2, warmup=1, budget_ms=budget_ms)
 
 
 def test_measure_sleep_has_no_budget_decision():
     # the LS-04 reproduction: a 250ms sleep must not produce a budget verdict
     with pytest.raises(ValueError, match="budget gating is unavailable"):
-        measure(["-c", "import time; time.sleep(0.25)"], runs=1, warmup=0, budget_ms=100)
+        measure([PY, "-c", "import time; time.sleep(0.25)"], runs=1, warmup=0, budget_ms=100)
 
 
 def test_measure_sleep_without_budget_reports_import_profile():
-    result = measure(["-c", "import time; time.sleep(0.25)"], runs=1, warmup=0)
+    result = measure([PY, "-c", "import time; time.sleep(0.25)"], runs=1, warmup=0)
     assert result.ok is True
     assert result.budget is None
 
 
 def test_measure_has_module_timings():
-    result = measure(["json"], runs=2, warmup=1)
+    result = measure(IMPORT_JSON, runs=2, warmup=1)
     assert len(result.per_module_top) > 0
     assert result.per_module_top[0].cumulative_us > 0
 
 
 def test_result_to_dict():
-    result = measure(["json"], runs=2, warmup=1)
+    result = measure(IMPORT_JSON, runs=2, warmup=1)
     d = result_to_dict(result)
-    assert d["entry_command"] == ["json"]
+    assert d["entry_command"] == IMPORT_JSON
     assert d["metric"] == "import_profile_max_cumulative_ms"
     assert d["ok"] is True
     assert d["errors"] == []
@@ -74,7 +79,7 @@ def test_result_to_dict():
 
 
 def test_result_to_dict_all_failed():
-    result = measure(["nonexistent_module_xyz"], runs=1, warmup=0)
+    result = measure([PY, "-c", "raise SystemExit(3)"], runs=1, warmup=0)
     assert result.ok is False
     d = result_to_dict(result)
     assert d["ok"] is False
@@ -92,11 +97,11 @@ def test_result_to_dict_all_failed():
 )
 def test_measure_rejects_invalid_counts(kwargs, message):
     with pytest.raises(ValueError, match=message):
-        measure(["json"], **kwargs)
+        measure(IMPORT_JSON, **kwargs)
 
 
 def test_measure_nonzero_exit_is_error():
-    result = measure(["nonexistent_module_xyz"], runs=2, warmup=1)
+    result = measure([PY, "-c", "raise SystemExit(1)"], runs=2, warmup=1)
     assert result.ok is False
     assert result.total_ms is None
     assert result.per_module_top == []
@@ -107,7 +112,7 @@ def test_measure_nonzero_exit_is_error():
 
 
 def test_measure_missing_executable_is_error():
-    result = measure(["json"], runs=2, warmup=0, python="/nonexistent-python-xyz")
+    result = measure(["lazysafe-no-such-executable-xyz", "-c", "pass"], runs=2, warmup=0)
     assert result.ok is False
     assert result.total_ms is None
     assert result.runs == {"warmup": 0, "measured": 2, "succeeded": 0, "failed": 2}
@@ -116,7 +121,7 @@ def test_measure_missing_executable_is_error():
 
 def test_measure_timeout_is_error(monkeypatch):
     monkeypatch.setattr(measure_module, "_SAMPLE_TIMEOUT_S", 1)
-    result = measure(["-c", "import time; time.sleep(5)"], runs=1, warmup=0)
+    result = measure([PY, "-c", "import time; time.sleep(5)"], runs=1, warmup=0)
     assert result.ok is False
     assert result.total_ms is None
     assert [e.kind for e in result.errors] == ["timeout"]
@@ -135,7 +140,7 @@ def test_measure_mixed_success_cannot_pass(tmp_path, monkeypatch):
     marker = tmp_path / "marker"
     monkeypatch.chdir(tmp_path)
 
-    result = measure([str(script), str(marker)], runs=2, warmup=0)
+    result = measure([PY, str(script), str(marker)], runs=2, warmup=0)
 
     assert result.ok is False
     assert result.total_ms is None

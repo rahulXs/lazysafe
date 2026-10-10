@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -21,6 +22,84 @@ _INVALID_TARGET_HELP = {
     "not-found": "no such file or directory",
     "not-a-directory": "not a directory; pass a directory to scan",
 }
+
+# Options that moved in 0.7.0. argparse would only call them unknown, so they
+# get a diagnostic that names the replacement.
+_MOVED_OPTIONS = {
+    "measure": {
+        "--python": "name the executable after `--`, e.g. `lazysafe measure -- python -m pytest`",
+    },
+    "verify": {
+        "--python": "name the executable after `--`, e.g. `lazysafe verify -- python -m pytest`",
+        "--lazy-python": (
+            "both runs now use the one executable after `--`; lazysafe checks that it "
+            "defers imports itself"
+        ),
+    },
+}
+
+# A command must start with an executable, so a leading -c or -m means the
+# executable is missing.
+_LEADING_FLAGS = {"-c", "-m"}
+
+
+def _command_name(argv):
+    """The subcommand, which is the first token that is not an option."""
+    for token in argv:
+        if not token.startswith("-"):
+            return token
+    return None
+
+
+def _check_command_line(argv):
+    """Reject the old spellings before argparse reports them as unknown."""
+    command = _command_name(argv)
+    if command is None:
+        return
+
+    for flag, hint in _MOVED_OPTIONS.get(command, {}).items():
+        if flag in argv:
+            print(
+                f"  error: {flag} was removed from `lazysafe {command}`.\n         {hint}\n",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+    rest = argv[argv.index(command) + 1 :]
+    for token in rest:
+        if token == "--":
+            break
+        if token in _LEADING_FLAGS:
+            print(
+                f"  error: `lazysafe {command}` needs the executable before {token}.\n"
+                f"         example: lazysafe {command} -- python {token} <args>\n",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+
+def _literal_command(rest):
+    """Strip the `--` delimiter, require an executable, and resolve it once.
+
+    Resolving here means later working-directory changes cannot change which
+    program runs.
+    """
+    if rest and rest[0] == "--":
+        rest = rest[1:]
+
+    if not rest:
+        print(
+            "  error: no command given.\n"
+            "         example: lazysafe measure -- python -c 'import json'\n",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    resolved = shutil.which(rest[0])
+    if resolved:
+        return [resolved, *rest[1:]]
+
+    return list(rest)
 
 
 def _read_source_for_analysis(node, model):
@@ -130,10 +209,9 @@ def _cmd_measure(args):
 
     try:
         result = measure(
-            args.entry_command,
+            _literal_command(args.command_argv),
             runs=args.runs if args.runs is not None else config.measure_runs,
             warmup=args.warmup if args.warmup is not None else config.measure_warmup,
-            python=args.python,
         )
     except ValueError as exc:
         print(f"  error: {exc}\n", file=sys.stderr)
@@ -282,12 +360,7 @@ def _cmd_apply(args):
 
 
 def _cmd_verify(args):
-    command = args.command_to_run
-    result = verify(
-        command,
-        python=args.python,
-        lazy_python=args.lazy_python,
-    )
+    result = verify(_literal_command(args.command_argv))
 
     if result.error:
         print(f"  error: {result.error}\n", file=sys.stderr)
@@ -326,6 +399,8 @@ def _cmd_verify(args):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+
     parser = argparse.ArgumentParser(
         prog="lazysafe",
         description="safely adopt python 3.15 lazy imports.",
@@ -338,12 +413,19 @@ def main(argv=None):
     p_analyze.add_argument("--json", action="store_true", help="output as JSON")
     p_analyze.add_argument("--all", action="store_true", help="show safe modules too")
 
-    p_measure = sub.add_parser("measure", help="measure import-profile timing")
-    p_measure.add_argument("entry_command", nargs="+", help="command to measure")
+    p_measure = sub.add_parser(
+        "measure",
+        help="measure import-profile timing for a literal command",
+        epilog="example: lazysafe measure -- python -c 'import json'",
+    )
+    p_measure.add_argument(
+        "command_argv",
+        nargs=argparse.REMAINDER,
+        help="literal executable and arguments, after `--`",
+    )
     p_measure.add_argument("--runs", type=int, help="number of measured runs")
     p_measure.add_argument("--warmup", type=int, help="number of warmup runs")
     p_measure.add_argument("--budget", type=float, help="budget gating (currently unavailable)")
-    p_measure.add_argument("--python", help="python interpreter to use")
     p_measure.add_argument("--json", action="store_true", help="output as JSON")
 
     p_probe = sub.add_parser("probe", help="probe modules for runtime side effects")
@@ -371,11 +453,16 @@ def main(argv=None):
     p_verify = sub.add_parser(
         "verify",
         help="experimental: compare one command eager vs lazy (not a source-edit check)",
+        epilog="example: lazysafe verify -- python -m pytest -q",
     )
-    p_verify.add_argument("command_to_run", nargs="+", help="command to verify")
-    p_verify.add_argument("--python", help="python interpreter for eager mode")
-    p_verify.add_argument("--lazy-python", help="python 3.15+ for lazy mode")
+    p_verify.add_argument(
+        "command_argv",
+        nargs=argparse.REMAINDER,
+        help="literal executable and arguments, after `--`",
+    )
     p_verify.add_argument("--json", action="store_true", help="output as JSON")
+
+    _check_command_line(argv)
 
     args = parser.parse_args(argv)
 

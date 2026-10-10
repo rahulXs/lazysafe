@@ -28,7 +28,7 @@ lazysafe analyze src/
 lazysafe analyze src/ --all
 
 # measure import-profile data (not command duration)
-lazysafe measure --runs 3 -- -m myapp
+lazysafe measure --runs 3 -- python -m myapp
 
 # probe modules for runtime side effects
 # NOTE: probing imports the target in a child process running with your
@@ -42,11 +42,25 @@ lazysafe apply src/ --dry-run
 # recovery support is available.
 
 # compare one command eager vs lazy (experimental)
-lazysafe verify -- -m pytest -q
-# NOTE: arguments after `--` go to the interpreter, so this runs
-# `python -m pytest -q` twice. `lazysafe verify -- python -m pytest -q`
-# does NOT work: it asks python to run a file named "python".
+lazysafe verify -- python -m pytest -q
 ```
+
+### literal commands
+
+`measure` and `verify` take one literal command: everything after `--` is the
+executable and its arguments, run directly with no shell and no interpreter
+added.
+
+```bash
+lazysafe measure -- python -c 'import json'   # a bare `measure json` is not a module import
+lazysafe measure -- ./scripts/start.sh --port 8080
+lazysafe verify  -- python -m pytest -q
+```
+
+a path with spaces, unicode arguments, and shell metacharacters such as `*` or
+`$HOME` all reach the program unchanged. name the interpreter yourself: there is
+no `--python` for these commands. `probe` keeps its own `--python`, which selects
+the interpreter used to probe a target.
 
 ### what verify does and does not do
 

@@ -7,7 +7,6 @@ pass. Nothing here proves a lazy import rewrite is safe.
 """
 
 import subprocess
-import sys
 from dataclasses import dataclass
 
 from lazysafe.capability import lazy_support
@@ -32,13 +31,12 @@ class VerifyResult:
     error: str = ""
 
 
-def _run_command(command, python, lazy=False, timeout=_TIMEOUT_S):
-    args = [python]
+def _run_command(command, lazy=False, timeout=_TIMEOUT_S):
+    # command is a literal argv; lazy mode goes right after the executable
+    args = [command[0], *command[1:]]
 
     if lazy:
-        args.extend(["-X", "lazy_imports=all"])
-
-    args.extend(command)
+        args[1:1] = ["-X", "lazy_imports=all"]
 
     try:
         run = subprocess.run(
@@ -49,7 +47,7 @@ def _run_command(command, python, lazy=False, timeout=_TIMEOUT_S):
             check=False,
         )
     except FileNotFoundError:
-        return RunResult(exit_code=None, stdout="", stderr="interpreter not found")
+        return RunResult(exit_code=None, stdout="", stderr="executable not found")
     except subprocess.TimeoutExpired:
         return RunResult(exit_code=None, stdout="", stderr="timed out")
     except OSError as exc:
@@ -62,11 +60,8 @@ def _run_command(command, python, lazy=False, timeout=_TIMEOUT_S):
     )
 
 
-def verify(command, *, python=None, lazy_python=None, timeout=_TIMEOUT_S):
-    exe = python or sys.executable
-    lazy_exe = lazy_python or exe
-
-    ok, reason = lazy_support(lazy_exe)
+def verify(command, *, timeout=_TIMEOUT_S):
+    ok, reason = lazy_support(command[0])
     if not ok:
         return VerifyResult(
             equivalent=False,
@@ -76,8 +71,8 @@ def verify(command, *, python=None, lazy_python=None, timeout=_TIMEOUT_S):
             error=reason,
         )
 
-    eager = _run_command(command, exe, lazy=False, timeout=timeout)
-    lazy = _run_command(command, lazy_exe, lazy=True, timeout=timeout)
+    eager = _run_command(command, lazy=False, timeout=timeout)
+    lazy = _run_command(command, lazy=True, timeout=timeout)
 
     for name, side in (("eager", eager), ("lazy", lazy)):
         if side.exit_code is None:

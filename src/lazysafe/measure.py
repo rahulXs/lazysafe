@@ -2,7 +2,6 @@
 
 import statistics
 import subprocess
-import sys
 from dataclasses import dataclass, field
 
 _SAMPLE_TIMEOUT_S = 60
@@ -67,13 +66,9 @@ def _parse_importtime_line(line):
     return cumulative_us, self_us, module
 
 
-def _run_sample(command, python=None):
-    exe = python or sys.executable
-
-    if len(command) == 1 and not command[0].startswith("-"):
-        cmd = [exe, "-X", "importtime", "-c", f"import {command[0]}"]
-    else:
-        cmd = [exe, "-X", "importtime", *command]
+def _run_sample(command):
+    # command is a literal argv, so importtime goes right after the executable
+    cmd = [command[0], "-X", "importtime", *command[1:]]
 
     try:
         result = subprocess.run(
@@ -113,14 +108,7 @@ def _run_sample(command, python=None):
     return _Sample(ok=True, duration_ms=total_us / 1000.0, modules=modules)
 
 
-def measure(
-    command,
-    *,
-    runs=15,
-    warmup=2,
-    budget_ms=None,
-    python=None,
-):
+def measure(command, *, runs=15, warmup=2, budget_ms=None):
     if runs < 1:
         raise ValueError("runs must be >= 1")
     if warmup < 0:
@@ -137,7 +125,7 @@ def measure(
     total_runs = warmup + runs
     for i in range(total_runs):
         phase = "warmup" if i < warmup else "measured"
-        sample = _run_sample(command, python=python)
+        sample = _run_sample(command)
         if sample.ok:
             succeeded += 1
             if phase == "measured":
@@ -166,7 +154,7 @@ def measure(
 
     return MeasureResult(
         entry_command=command,
-        interpreter=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        interpreter=command[0],
         runs={"warmup": warmup, "measured": runs, "succeeded": succeeded, "failed": failed},
         total_ms=total_ms,
         budget=None,
