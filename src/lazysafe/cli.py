@@ -43,6 +43,15 @@ _MOVED_OPTIONS = {
 _LEADING_FLAGS = {"-c", "-m"}
 
 
+def _load_config(project_root):
+    """load config, converting validation failures into a clean usage error."""
+    try:
+        return load_config(project_root)
+    except ValueError as exc:
+        print(f"  error: {exc}\n", file=sys.stderr)
+        sys.exit(2)
+
+
 def _command_name(argv):
     """The subcommand, which is the first token that is not an option."""
     for token in argv:
@@ -113,7 +122,7 @@ def _read_source_for_analysis(node, model):
 
 
 def _cmd_analyze(args):
-    config = load_config(Path.cwd())
+    config = _load_config(Path.cwd())
     targets = args.targets or config.targets
 
     start = time.monotonic()
@@ -201,7 +210,7 @@ def _print_skipped(skipped):
 
 
 def _cmd_measure(args):
-    config = load_config(Path.cwd())
+    config = _load_config(Path.cwd())
     budget = args.budget if args.budget is not None else config.budget_ms
     if budget is not None:
         print(f"  error: {BUDGET_UNAVAILABLE}\n", file=sys.stderr)
@@ -304,7 +313,7 @@ def _cmd_probe(args):
 
 
 def _build_apply_model(args):
-    config = load_config(Path.cwd())
+    config = _load_config(Path.cwd())
     targets = args.targets or config.targets
     project_root = Path.cwd()
 

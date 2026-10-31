@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+
+- `lazysafe.toml` now validates `targets` as a list of strings and rejects
+  removed (`allowlist`) and temporarily unavailable measurement settings
+  (`budget_ms`, `measure_runs`, `measure_warmup`) instead of silently
+  accepting them. unknown keys are reported in sorted order. invalid TOML or
+  value types exit 2 without a traceback or value echo
+
 ## [0.6.0] - 2026-10-03
 
 This release removes guarantees the code did not provide. Anything under

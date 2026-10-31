@@ -86,8 +86,11 @@ when the runs disagree.
 ### configuration
 
 `analyze` and `apply` read `lazysafe.toml` from the current directory when it
-exists, for `targets`, `measure_runs`, and `measure_warmup`. an unknown key is
-an error. the `allowlist` key is accepted but has no effect yet.
+exists. only `targets` is supported in this release; it must be a list of
+strings. `allowlist`, `budget_ms`, `measure_runs`, and `measure_warmup` are
+rejected as removed or temporarily unavailable. unknown keys are an error and
+are listed in sorted order. invalid TOML or value types exit 2 without a
+traceback.
 
 ## what it does
 
