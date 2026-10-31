@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rahulxs/lazysafe/schemas/common-v2.json",
+  "title": "lazysafe common report envelope v2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "tool",
+    "outcome",
+    "run",
+    "errors",
+    "coverage",
+    "result"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "kind": {
+      "enum": ["error", "analysis", "measurement", "verification", "trial"]
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "outcome": {
+      "enum": ["completed", "negative", "error"]
+    },
+    "run": {
+      "type": "object",
+      "required": ["id", "timestamp_utc", "duration_ms"],
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp_utc": { "type": "string" },
+        "duration_ms": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message", "phase"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "phase": { "type": "string" },
+          "path": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "supported": { "type": "array", "items": { "type": "string" } },
+        "unavailable": { "type": "array", "items": { "type": "string" } },
+        "incomplete": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "result": {}
+  },
+  "additionalProperties": true
+}

@@ -67,4 +67,5 @@ dev = [
     "ruff>=0.5",
     "build>=1.2",
     "twine>=6",
+    "jsonschema>=4,<5",
 ]

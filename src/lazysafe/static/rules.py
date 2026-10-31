@@ -38,7 +38,7 @@ def _check_se01(tree):
     for node in ast.iter_child_nodes(tree):
         is_call = isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
         if is_call and not _is_pure_builtin_call(node.value):
-            findings.append(_make_finding("SE01", node.lineno, ast.dump(node.value.func), 0.6))
+            findings.append(_make_finding("SE01", node.lineno, "call expression", 0.6))
 
     return findings
 

@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   accepting them. unknown keys are reported in sorted order. invalid TOML or
   value types exit 2 without a traceback or value echo
 
+### Added
+
+- schema-2 report envelope with required common fields, structured error
+  records, coverage, and privacy-preserving construction helpers
+
 ## [0.6.0] - 2026-10-03
 
 This release removes guarantees the code did not provide. Anything under

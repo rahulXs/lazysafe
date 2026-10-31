@@ -43,11 +43,15 @@ _MOVED_OPTIONS = {
 _LEADING_FLAGS = {"-c", "-m"}
 
 
-def _load_config(project_root):
+def _load_config(project_root, json_output=False):
     """load config, converting validation failures into a clean usage error."""
     try:
         return load_config(project_root)
     except ValueError as exc:
+        from lazysafe.report import error_report
+
+        if json_output:
+            print(json.dumps(error_report("invalid_config", str(exc)), allow_nan=False))
         print(f"  error: {exc}\n", file=sys.stderr)
         sys.exit(2)
 
@@ -122,7 +126,7 @@ def _read_source_for_analysis(node, model):
 
 
 def _cmd_analyze(args):
-    config = _load_config(Path.cwd())
+    config = _load_config(Path.cwd(), getattr(args, "json", False))
     targets = args.targets or config.targets
 
     start = time.monotonic()
@@ -138,10 +142,11 @@ def _cmd_analyze(args):
     classify_all(model)
 
     report = write_analysis_report(model, targets, duration_ms)
+    result = report.get("result", report)
 
     _print_analysis_table(report, args)
 
-    invalid = [s for s in report["skipped"] if s["reason"] in _INVALID_TARGET_HELP]
+    invalid = [s for s in result["skipped"] if s["reason"] in _INVALID_TARGET_HELP]
     if invalid:
         for entry in invalid:
             print(
@@ -150,17 +155,18 @@ def _cmd_analyze(args):
             )
         sys.exit(2)
 
-    if report["stats"]["files_scanned"] == 0:
+    if result["stats"]["files_scanned"] == 0:
         print("  no modules examined; no safety claim made.\n", file=sys.stderr)
         sys.exit(1)
 
 
 def _print_analysis_table(report, args):
+    result = report.get("result", report)
     if args.json:
-        print(json.dumps(report, indent=2))
+        print(json.dumps(report, indent=2, allow_nan=False))
         return
 
-    stats = report["stats"]
+    stats = result["stats"]
     print(f"\nscanned {stats['files_scanned']} files, {stats['top_level_imports']} imports")
     print(
         f"classified: {stats['by_class']['safe']} safe, "
@@ -169,10 +175,10 @@ def _print_analysis_table(report, args):
         f"{stats['by_class']['unknown']} unknown"
     )
 
-    skipped = [s for s in report["skipped"] if s["reason"] not in _INVALID_TARGET_HELP]
+    skipped = [s for s in result["skipped"] if s["reason"] not in _INVALID_TARGET_HELP]
 
-    has_findings = any(mod["reasons"] for mod in report["modules"])
-    if not report["modules"]:
+    has_findings = any(mod["reasons"] for mod in result["modules"])
+    if not result["modules"]:
         _print_skipped(skipped)
         return
 
@@ -184,7 +190,7 @@ def _print_analysis_table(report, args):
         _print_skipped(skipped)
         return
 
-    for mod in report["modules"]:
+    for mod in result["modules"]:
         cls = mod["class"]
         if cls == "safe" and not args.all:
             continue
@@ -210,7 +216,7 @@ def _print_skipped(skipped):
 
 
 def _cmd_measure(args):
-    config = _load_config(Path.cwd())
+    config = _load_config(Path.cwd(), getattr(args, "json", False))
     budget = args.budget if args.budget is not None else config.budget_ms
     if budget is not None:
         print(f"  error: {BUDGET_UNAVAILABLE}\n", file=sys.stderr)
@@ -313,7 +319,7 @@ def _cmd_probe(args):
 
 
 def _build_apply_model(args):
-    config = _load_config(Path.cwd())
+    config = _load_config(Path.cwd(), getattr(args, "json", False))
     targets = args.targets or config.targets
     project_root = Path.cwd()
 
