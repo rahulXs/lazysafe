@@ -52,7 +52,8 @@ def test_clean_package_is_safe():
 
     own = [n for n in model.modules if n.origin == Origin.OWN]
     assert own
-    assert all(n.classification == Classification.SAFE for n in own)
+    assert all(n.classification == Classification.UNKNOWN for n in own)
+    assert all("heuristic_coverage_incomplete" in n.coverage_gaps for n in own)
 
 
 def test_side_effect_fixtures_land_in_risky_or_unsafe():

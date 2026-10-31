@@ -49,3 +49,4 @@ class ModuleNode:
 class ImportModel:
     modules: list[ModuleNode] = field(default_factory=list)
     skipped: list[dict[str, str]] = field(default_factory=list)
+    incomplete: bool = False

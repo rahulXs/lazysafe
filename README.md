@@ -92,6 +92,11 @@ rejected as removed or temporarily unavailable. unknown keys are an error and
 are listed in sorted order. invalid TOML or value types exit 2 without a
 traceback.
 
+in this release `measure`, `verify`, `probe`, and `apply` are unavailable and
+exit 2 with `command_unavailable`. `analyze` treats an empty, missing-target,
+unreadable, parse-failed, or rule-failed scan as incomplete (exit 3); a scan
+with no findings is `unknown`, not `safe`.
+
 ## what it does
 
 lazysafe scans your Python source files and classifies each **top-level** import

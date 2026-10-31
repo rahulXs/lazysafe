@@ -121,6 +121,7 @@ def write_analysis_report(model, targets, duration_ms):
                     for f in m.findings
                 ],
                 "imports_top_level": [i.module for i in m.imports],
+                "coverage_gaps": m.coverage_gaps,
             }
             for m in model.modules
         ],
@@ -135,6 +136,10 @@ def write_analysis_report(model, targets, duration_ms):
     }
     if not model.modules:
         coverage["incomplete"].append("no_modules_examined")
+    if any(s.get("reason") in {"parse-error", "unreadable"} for s in model.skipped):
+        coverage["incomplete"].append("file_parse_or_read_failure")
+    if any(m.coverage_gaps for m in model.modules):
+        coverage["incomplete"].append("heuristic_coverage_incomplete")
 
     outcome = "completed"
     errors = []

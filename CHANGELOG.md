@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - schema-2 report envelope with required common fields, structured error
   records, coverage, and privacy-preserving construction helpers
 
+### Changed
+
+- incomplete analysis is now reported as `unknown` or exit 3 instead of a
+  clean or safe result; `measure`, `verify`, `probe`, and `apply` are
+  unavailable in this release and exit 2 with `command_unavailable`
+
 ## [0.6.0] - 2026-10-03
 
 This release removes guarantees the code did not provide. Anything under

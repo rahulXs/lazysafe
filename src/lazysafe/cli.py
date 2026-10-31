@@ -137,7 +137,10 @@ def _cmd_analyze(args):
         if node.file:
             source = _read_source_for_analysis(node, model)
             if source is not None:
-                node.findings = run_static(node, source)
+                try:
+                    node.findings = run_static(node, source)
+                except Exception:
+                    node.coverage_gaps.append("rule-execution-failed")
 
     classify_all(model)
 
@@ -155,9 +158,13 @@ def _cmd_analyze(args):
             )
         sys.exit(2)
 
-    if result["stats"]["files_scanned"] == 0:
-        print("  no modules examined; no safety claim made.\n", file=sys.stderr)
-        sys.exit(1)
+    if (
+        result["stats"]["files_scanned"] == 0
+        or any(s.get("reason") in {"parse-error", "unreadable"} for s in result["skipped"])
+        or any("rule-execution-failed" in m.get("coverage_gaps", []) for m in result["modules"])
+    ):
+        print("  incomplete analysis; no safety claim made.\n", file=sys.stderr)
+        sys.exit(3)
 
 
 def _print_analysis_table(report, args):
@@ -430,7 +437,7 @@ def main(argv=None):
 
     p_measure = sub.add_parser(
         "measure",
-        help="measure import-profile timing for a literal command",
+        help="unavailable in this release: command duration returns in 0.8.0",
         epilog="example: lazysafe measure -- python -c 'import json'",
     )
     p_measure.add_argument(
@@ -443,7 +450,7 @@ def main(argv=None):
     p_measure.add_argument("--budget", type=float, help="budget gating (currently unavailable)")
     p_measure.add_argument("--json", action="store_true", help="output as JSON")
 
-    p_probe = sub.add_parser("probe", help="probe modules for runtime side effects")
+    p_probe = sub.add_parser("probe", help="unavailable in this release: conditional feature")
     p_probe.add_argument("modules", nargs="+", help="modules to probe")
     p_probe.add_argument("--python", help="python interpreter to use")
     p_probe.add_argument("--timeout", type=float, default=30.0, help="timeout in seconds")
@@ -453,7 +460,7 @@ def main(argv=None):
     p_probe.add_argument("--json", action="store_true", help="output as JSON")
 
     p_apply = sub.add_parser(
-        "apply", help="preview lazy import rewrites (experimental; writes disabled)"
+        "apply", help="unavailable in this release: source writes remain disabled"
     )
     p_apply.add_argument("targets", nargs="*", help="directories to scan")
     p_apply.add_argument(
@@ -467,7 +474,7 @@ def main(argv=None):
 
     p_verify = sub.add_parser(
         "verify",
-        help="experimental: compare one command eager vs lazy (not a source-edit check)",
+        help="unavailable in this release: source comparison returns in 0.9.0",
         epilog="example: lazysafe verify -- python -m pytest -q",
     )
     p_verify.add_argument(
@@ -479,6 +486,38 @@ def main(argv=None):
 
     _check_command_line(argv)
 
+    command = _command_name(argv)
+    _disabled = {"measure", "verify", "probe", "apply"}
+    if command in _disabled and "--help" not in argv and "-h" not in argv:
+        from lazysafe.report import error_report
+
+        json_mode = False
+        if command is not None:
+            idx = argv.index(command)
+            json_mode = "--json" in argv[:idx]
+
+        unavailable_messages = {
+            "measure": (
+                "lazysafe measure is unavailable in this release; "
+                "command duration returns in 0.8.0."
+            ),
+            "verify": (
+                "lazysafe verify is unavailable in this release; "
+                "source comparison returns in 0.9.0."
+            ),
+            "probe": (
+                "lazysafe probe is unavailable in this release; it remains a conditional feature."
+            ),
+            "apply": (
+                "lazysafe apply is unavailable in this release; source writes remain disabled."
+            ),
+        }
+        message = unavailable_messages[command]
+        if json_mode:
+            print(json.dumps(error_report("command_unavailable", message), allow_nan=False))
+        print(f"  error: {message}\n", file=sys.stderr)
+        sys.exit(2)
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -487,10 +526,6 @@ def main(argv=None):
 
     commands = {
         "analyze": _cmd_analyze,
-        "measure": _cmd_measure,
-        "probe": _cmd_probe,
-        "apply": _cmd_apply,
-        "verify": _cmd_verify,
     }
 
     commands[args.command](args)

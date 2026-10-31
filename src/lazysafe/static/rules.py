@@ -223,10 +223,7 @@ def _check_se08(tree):
 
 def run_static(node, source):
     """run all SE rules on a module's source."""
-    try:
-        tree = ast.parse(source, filename=node.file)
-    except SyntaxError:
-        return []
+    tree = ast.parse(source, filename=node.file)
 
     findings = []
     findings.extend(_check_se01(tree))

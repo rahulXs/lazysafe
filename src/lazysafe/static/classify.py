@@ -1,15 +1,12 @@
 """classify each scanned module from its findings."""
 
-from lazysafe.model import Classification, Origin
+from lazysafe.model import Classification
 
 _UNSAFE_RULES = {"SE02", "SE03", "SE04", "SE07"}
 _RISKY_RULES = {"SE01", "SE05", "SE06", "SE08"}
 
 
 def _classify_module(node):
-    if node.coverage_gaps:
-        return Classification.UNKNOWN
-
     rules = {f.rule for f in node.findings}
 
     if rules & _UNSAFE_RULES:
@@ -18,10 +15,10 @@ def _classify_module(node):
     if rules & _RISKY_RULES:
         return Classification.RISKY
 
-    if node.origin in (Origin.THIRD_PARTY, Origin.UNKNOWN) and not node.findings:
-        return Classification.UNKNOWN
-
-    return Classification.SAFE
+    # No finding is not proof of safety. Keep the heuristic explicit as a
+    # coverage gap so an empty result can never read as eligibility.
+    node.coverage_gaps.append("heuristic_coverage_incomplete")
+    return Classification.UNKNOWN
 
 
 def classify_all(model):

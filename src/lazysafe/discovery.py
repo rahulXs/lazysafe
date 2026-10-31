@@ -148,8 +148,11 @@ def _scan_target(target, project_root, own_prefixes, model):
         try:
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
-        except (OSError, SyntaxError, UnicodeDecodeError) as exc:
-            model.skipped.append({"path": str(rel), "reason": str(exc)})
+        except (OSError, UnicodeDecodeError):
+            model.skipped.append({"path": str(rel), "reason": "unreadable"})
+            continue
+        except SyntaxError:
+            model.skipped.append({"path": str(rel), "reason": "parse-error"})
             continue
 
         origin = _classify_origin(module, own_prefixes)

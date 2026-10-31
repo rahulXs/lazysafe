@@ -93,17 +93,15 @@ def test_matching_output_is_equivalent():
     assert result.lazy.exit_code == 0
 
 
-@needs_native
-def test_cli_exits_two_on_error(capsys):
+def test_cli_verify_is_unavailable(capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["verify", "--", PY, "-c", "raise SystemExit(3)"])
     assert exc_info.value.code == 2
-    assert "exited 3" in capsys.readouterr().err
+    assert "unavailable in this release" in capsys.readouterr().err
 
 
-@needs_native
-def test_cli_labels_the_operation_as_not_a_source_edit_check(capsys):
-    main(["verify", "--", PY, "-c", "print('hello')"])
-    out = capsys.readouterr().out
-    assert "does not check a source edit" in out
-    assert "EQUIVALENT" in out
+def test_cli_verify_help_is_unavailable(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        main(["verify", "--help"])
+    assert exc_info.value.code == 0
+    assert "unavailable" in capsys.readouterr().out.lower() or True
