@@ -147,16 +147,28 @@ def _cmd_analyze(args):
     report = write_analysis_report(model, targets, duration_ms)
     result = report.get("result", report)
 
-    _print_analysis_table(report, args)
-
     invalid = [s for s in result["skipped"] if s["reason"] in _INVALID_TARGET_HELP]
     if invalid:
+        from lazysafe.report import error_report
+
         for entry in invalid:
             print(
                 f"  error: {entry['path']}: {_INVALID_TARGET_HELP[entry['reason']]}\n",
                 file=sys.stderr,
             )
+        if getattr(args, "json", False):
+            print(
+                json.dumps(
+                    error_report(
+                        "invalid_config",
+                        f"{invalid[0]['path']}: {_INVALID_TARGET_HELP[invalid[0]['reason']]}",
+                    ),
+                    allow_nan=False,
+                )
+            )
         sys.exit(2)
+
+    _print_analysis_table(report, args)
 
     if (
         result["stats"]["files_scanned"] == 0
