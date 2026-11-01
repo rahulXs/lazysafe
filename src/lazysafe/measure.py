@@ -1,8 +1,9 @@
 """import-profile timing harness using -X importtime."""
 
 import statistics
-import subprocess
 from dataclasses import dataclass, field
+
+from lazysafe import process as process_runner
 
 _SAMPLE_TIMEOUT_S = 60
 
@@ -70,33 +71,25 @@ def _run_sample(command):
     # command is a literal argv, so importtime goes right after the executable
     cmd = [command[0], "-X", "importtime", *command[1:]]
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=_SAMPLE_TIMEOUT_S,
-        )
-    except OSError as exc:
-        return _Sample(ok=False, error_kind="spawn_error", error_detail=str(exc))
-    except subprocess.TimeoutExpired:
-        return _Sample(
-            ok=False,
-            error_kind="timeout",
-            error_detail=f"no exit within {_SAMPLE_TIMEOUT_S}s",
-        )
+    outcome = process_runner.run(cmd, timeout=_SAMPLE_TIMEOUT_S)
 
-    if result.returncode != 0:
+    if outcome.outcome == "spawn_error":
+        return _Sample(ok=False, error_kind="spawn_error", error_detail=outcome.detail)
+    if outcome.outcome == "timeout":
+        return _Sample(ok=False, error_kind="timeout", error_detail=outcome.detail)
+    if outcome.outcome == "signaled":
+        return _Sample(ok=False, error_kind="signal", error_detail=outcome.detail)
+    if outcome.outcome == "interrupted":
+        return _Sample(ok=False, error_kind="interrupted", error_detail=outcome.detail)
+    if outcome.returncode != 0:
         return _Sample(
-            ok=False,
-            error_kind="nonzero_exit",
-            error_detail=f"exit {result.returncode}",
+            ok=False, error_kind="nonzero_exit", error_detail=f"exit {outcome.returncode}"
         )
 
     total_us = 0
     modules = []
 
-    for line in result.stderr.splitlines():
+    for line in outcome.stderr.decode("utf-8", "replace").splitlines():
         parsed = _parse_importtime_line(line)
         if parsed:
             cumulative, self_us, module = parsed

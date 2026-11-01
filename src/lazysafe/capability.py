@@ -6,7 +6,8 @@ something and checks whether it really stayed unloaded.
 """
 
 import functools
-import subprocess
+
+from lazysafe import process as process_runner
 
 _TIMEOUT_S = 30
 
@@ -24,26 +25,24 @@ NOT_CAPABLE = (
 @functools.cache
 def lazy_support(python):
     """Return (ok, reason). ok is False whenever no comparison can be trusted."""
-    try:
-        run = subprocess.run(
-            [python, "-X", "lazy_imports=all", "-c", _PROBE],
-            capture_output=True,
-            text=True,
-            timeout=_TIMEOUT_S,
-            check=False,
-        )
-    except FileNotFoundError:
+    outcome = process_runner.run(
+        [python, "-X", "lazy_imports=all", "-c", _PROBE], timeout=_TIMEOUT_S
+    )
+    if outcome.outcome == "spawn_error":
         return False, f"interpreter not found: {python}"
-    except subprocess.TimeoutExpired:
+    if outcome.outcome in ("timeout", "interrupted"):
         return False, f"interpreter did not answer within {_TIMEOUT_S}s: {python}"
-    except OSError as exc:
-        return False, f"could not start {python}: {exc}"
+    if outcome.outcome == "signaled":
+        return False, f"could not start {python}: {outcome.detail}"
+    run_returncode = outcome.returncode
+    run_stdout = outcome.stdout.decode("utf-8", "replace")
+    run_stderr = outcome.stderr.decode("utf-8", "replace")
 
-    if run.returncode != 0:
-        detail = run.stderr.strip().splitlines()[-1] if run.stderr.strip() else "no output"
+    if run_returncode != 0:
+        detail = run_stderr.strip().splitlines()[-1] if run_stderr.strip() else "no output"
         return False, f"{python} failed with -X lazy_imports=all: {detail}"
 
-    if run.stdout.strip() != "False":
+    if run_stdout.strip() != "False":
         return False, NOT_CAPABLE
 
     return True, ""

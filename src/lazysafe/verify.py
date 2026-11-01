@@ -6,9 +6,9 @@ compared exactly: no normalization, so two runs that merely look alike cannot
 pass. Nothing here proves a lazy import rewrite is safe.
 """
 
-import subprocess
 from dataclasses import dataclass
 
+from lazysafe import process as process_runner
 from lazysafe.capability import lazy_support
 
 _TIMEOUT_S = 300
@@ -38,25 +38,17 @@ def _run_command(command, lazy=False, timeout=_TIMEOUT_S):
     if lazy:
         args[1:1] = ["-X", "lazy_imports=all"]
 
-    try:
-        run = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except FileNotFoundError:
-        return RunResult(exit_code=None, stdout="", stderr="executable not found")
-    except subprocess.TimeoutExpired:
+    outcome = process_runner.run(args, timeout=timeout)
+    if outcome.outcome == "spawn_error":
+        return RunResult(exit_code=None, stdout="", stderr=outcome.detail or "executable not found")
+    if outcome.outcome in ("timeout", "interrupted"):
         return RunResult(exit_code=None, stdout="", stderr="timed out")
-    except OSError as exc:
-        return RunResult(exit_code=None, stdout="", stderr=str(exc))
-
+    if outcome.outcome == "signaled":
+        return RunResult(exit_code=None, stdout="", stderr=outcome.detail)
     return RunResult(
-        exit_code=run.returncode,
-        stdout=run.stdout,
-        stderr=run.stderr,
+        exit_code=outcome.returncode,
+        stdout=outcome.stdout.decode("utf-8", "replace"),
+        stderr=outcome.stderr.decode("utf-8", "replace"),
     )
 
 
