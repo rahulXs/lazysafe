@@ -1,23 +1,19 @@
-"""import-profile timing harness using -X importtime."""
+"""command-duration timing harness."""
 
+import math
 import statistics
+import time
 from dataclasses import dataclass, field
 
 from lazysafe import process as process_runner
+from lazysafe._version import __version__
 
-_SAMPLE_TIMEOUT_S = 60
+_SAMPLE_TIMEOUT_DEFAULT = 30.0
 
 BUDGET_UNAVAILABLE = (
     "budget gating is unavailable in this release: the reported metric is "
-    "import-profile data, not command duration, so no budget decision can be made."
+    "command duration, so a budget decision can be made."
 )
-
-
-@dataclass
-class ModuleTiming:
-    module: str
-    cumulative_us: int
-    self_us: int
 
 
 @dataclass
@@ -30,11 +26,14 @@ class SampleError:
 
 @dataclass
 class _Sample:
+    phase: str
     ok: bool
     duration_ms: float = 0.0
-    modules: list[ModuleTiming] = field(default_factory=list)
+    duration_ns: int = 0
+    returncode: int | None = None
     error_kind: str = ""
     error_detail: str = ""
+    truncated: bool = False
 
 
 @dataclass
@@ -43,14 +42,16 @@ class MeasureResult:
     interpreter: str
     runs: dict[str, int]
     total_ms: dict[str, float] | None
-    budget: dict[str, float | bool] | None = None
-    per_module_top: list[ModuleTiming] = field(default_factory=list)
+    budget: object = None
     errors: list[SampleError] = field(default_factory=list)
     ok: bool = True
+    samples: list[dict] = field(default_factory=list)
+    outcome: str = "completed"
 
 
 def _parse_importtime_line(line):
-    if not line.startswith("import time:"):
+    """Retained for compatibility; importtime attribution is not used."""
+    if not isinstance(line, str) or not line.startswith("import time:"):
         return None
 
     parts = line.split("|")
@@ -67,124 +68,208 @@ def _parse_importtime_line(line):
     return cumulative_us, self_us, module
 
 
-def _run_sample(command):
-    # command is a literal argv, so importtime goes right after the executable
-    cmd = [command[0], "-X", "importtime", *command[1:]]
-
-    outcome = process_runner.run(cmd, timeout=_SAMPLE_TIMEOUT_S)
-
-    if outcome.outcome == "spawn_error":
-        return _Sample(ok=False, error_kind="spawn_error", error_detail=outcome.detail)
-    if outcome.outcome == "timeout":
-        return _Sample(ok=False, error_kind="timeout", error_detail=outcome.detail)
-    if outcome.outcome == "signaled":
-        return _Sample(ok=False, error_kind="signal", error_detail=outcome.detail)
-    if outcome.outcome == "interrupted":
-        return _Sample(ok=False, error_kind="interrupted", error_detail=outcome.detail)
-    if outcome.returncode != 0:
-        return _Sample(
-            ok=False, error_kind="nonzero_exit", error_detail=f"exit {outcome.returncode}"
-        )
-
-    total_us = 0
-    modules = []
-
-    for line in outcome.stderr.decode("utf-8", "replace").splitlines():
-        parsed = _parse_importtime_line(line)
-        if parsed:
-            cumulative, self_us, module = parsed
-            total_us = max(total_us, cumulative)
-            modules.append(ModuleTiming(module=module, cumulative_us=cumulative, self_us=self_us))
-
-    modules.sort(key=lambda m: m.cumulative_us, reverse=True)
-
-    return _Sample(ok=True, duration_ms=total_us / 1000.0, modules=modules)
-
-
-def measure(command, *, runs=15, warmup=2, budget_ms=None):
-    if runs < 1:
-        raise ValueError("runs must be >= 1")
-    if warmup < 0:
-        raise ValueError("warmup must be >= 0")
-    if budget_ms is not None:
-        raise ValueError(BUDGET_UNAVAILABLE)
-
-    measured_times = []
-    first_modules = []
-    errors = []
-    succeeded = 0
-    failed = 0
-
-    total_runs = warmup + runs
-    for i in range(total_runs):
-        phase = "warmup" if i < warmup else "measured"
-        sample = _run_sample(command)
-        if sample.ok:
-            succeeded += 1
-            if phase == "measured":
-                measured_times.append(sample.duration_ms)
-            if not first_modules and sample.modules:
-                first_modules = sample.modules
+def _run_one(command, timeout):
+    outcome = process_runner.run(command, timeout=timeout)
+    ok = (
+        outcome.outcome == "exited"
+        and outcome.returncode == 0
+        and not outcome.stdout_truncated
+        and not outcome.stderr_truncated
+    )
+    error_kind = ""
+    error_detail = ""
+    if not ok:
+        if outcome.outcome == "spawn_error":
+            error_kind = "spawn_error"
+        elif outcome.outcome == "timeout":
+            error_kind = "timeout"
+        elif outcome.outcome == "signaled":
+            error_kind = "signal"
+        elif outcome.outcome == "interrupted":
+            error_kind = "interrupted"
+        elif outcome.stdout_truncated or outcome.stderr_truncated:
+            error_kind = "output_overflow"
+        elif outcome.returncode != 0:
+            error_kind = "nonzero_exit"
         else:
-            failed += 1
-            errors.append(
-                SampleError(
-                    sample=i, phase=phase, kind=sample.error_kind, detail=sample.error_detail
-                )
-            )
-
-    ok = failed == 0
-
-    total_ms = None
-    if ok:
-        p50 = statistics.median(measured_times)
-        total_ms = {
-            "p50": round(p50, 1),
-            "min": round(min(measured_times), 1),
-            "max": round(max(measured_times), 1),
-            "stdev": round(statistics.stdev(measured_times), 1) if len(measured_times) > 1 else 0.0,
-        }
-
-    return MeasureResult(
-        entry_command=command,
-        interpreter=command[0],
-        runs={"warmup": warmup, "measured": runs, "succeeded": succeeded, "failed": failed},
-        total_ms=total_ms,
-        budget=None,
-        per_module_top=[
-            ModuleTiming(module=m.module, cumulative_us=m.cumulative_us, self_us=m.self_us)
-            for m in first_modules[:20]
-        ]
-        if ok
-        else [],
-        errors=errors,
+            error_kind = outcome.outcome
+        error_detail = outcome.detail
+    return _Sample(
+        phase="",
         ok=ok,
+        duration_ms=outcome.elapsed_ns / 1_000_000.0,
+        duration_ns=outcome.elapsed_ns,
+        returncode=outcome.returncode,
+        error_kind=error_kind,
+        error_detail=error_detail,
+        truncated=outcome.stdout_truncated or outcome.stderr_truncated,
     )
 
 
+def measure(command, *, runs=15, warmup=2, budget_ms=None, timeout=_SAMPLE_TIMEOUT_DEFAULT):  # noqa: C901
+    if isinstance(runs, bool) or not isinstance(runs, int) or runs < 1:
+        raise ValueError("runs must be >= 1")
+    if isinstance(warmup, bool) or not isinstance(warmup, int) or warmup < 0:
+        raise ValueError("warmup must be >= 0")
+    if budget_ms is not None:
+        if isinstance(budget_ms, bool) or not isinstance(budget_ms, (int, float)):
+            raise ValueError("budget_ms must be a number")
+        if not math.isfinite(budget_ms) or budget_ms < 0:
+            raise ValueError("budget_ms must be finite and nonnegative")
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+        raise ValueError("timeout must be a number")
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("timeout must be finite and positive")
+
+    command = list(command)
+    samples = []
+    errors = []
+
+    for i in range(warmup):
+        sample = _run_one(command, timeout)
+        sample.phase = "warmup"
+        samples.append(sample)
+        if not sample.ok:
+            errors.append(
+                SampleError(
+                    sample=i, phase="warmup", kind=sample.error_kind, detail=sample.error_detail
+                )
+            )
+
+    for i in range(runs):
+        sample = _run_one(command, timeout)
+        sample.phase = "measured"
+        samples.append(sample)
+        if not sample.ok:
+            errors.append(
+                SampleError(
+                    sample=i, phase="measured", kind=sample.error_kind, detail=sample.error_detail
+                )
+            )
+
+    warmup_ok = all(s.ok for s in samples if s.phase == "warmup")
+    measured_ok = all(s.ok for s in samples if s.phase == "measured")
+    all_ok = warmup_ok and measured_ok
+
+    measured_durations = [s.duration_ns for s in samples if s.phase == "measured"]
+
+    if all_ok and measured_durations:
+        median_ns = statistics.median(measured_durations)
+        min_ns = min(measured_durations)
+        max_ns = max(measured_durations)
+        deviations = [abs(x - median_ns) for x in measured_durations]
+        mad_ns = statistics.median(deviations) if deviations else 0.0
+        total_ms = {
+            "p50": median_ns / 1_000_000.0,
+            "min": min_ns / 1_000_000.0,
+            "max": max_ns / 1_000_000.0,
+            "mad": mad_ns / 1_000_000.0,
+        }
+    else:
+        total_ms = None
+
+    if budget_ms is None:
+        budget = {"limit_ms": None, "status": "not_evaluated"}
+    elif not all_ok or total_ms is None:
+        budget = {"limit_ms": budget_ms, "status": "not_evaluated"}
+    else:
+        if total_ms["p50"] > budget_ms:
+            budget = {"limit_ms": budget_ms, "status": "failed"}
+        else:
+            budget = {"limit_ms": budget_ms, "status": "passed"}
+
+    ok = len(errors) == 0
+    if budget.get("status") == "failed":
+        outcome = "negative"
+    elif not ok:
+        outcome = "error"
+    else:
+        outcome = "completed"
+
+    result = MeasureResult(
+        entry_command=command,
+        interpreter=command[0] if command else "",
+        runs={
+            "warmup": warmup,
+            "measured": runs,
+            "succeeded": sum(1 for s in samples if s.ok),
+            "failed": sum(1 for s in samples if not s.ok),
+        },
+        total_ms=total_ms,
+        budget=budget,
+        errors=errors,
+        ok=ok,
+        samples=[
+            {
+                "phase": s.phase,
+                "outcome": "completed" if s.ok else "error",
+                "duration_ms": s.duration_ms,
+                "returncode": s.returncode,
+                "truncated": s.truncated,
+            }
+            for s in samples
+        ],
+        outcome=outcome,
+    )
+    return result
+
+
 def result_to_dict(result):
-    return {
-        "schema_version": 1,
-        "metric": "import_profile_max_cumulative_ms",
-        "metric_note": "import-profile data from -X importtime; not command duration",
+    run_id = __import__("uuid").uuid4().hex
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    duration_ms = 0.0
+    if result.total_ms:
+        duration_ms = result.total_ms["p50"]
+
+    errors = [
+        {
+            "code": "execution_error",
+            "message": e.detail,
+            "phase": e.phase,
+            "path": None,
+            "sample": e.sample,
+            "kind": e.kind,
+        }
+        for e in result.errors
+    ]
+
+    report = {
+        "schema_version": 2,
+        "kind": "measurement",
+        "tool": {"name": "lazysafe", "version": __version__},
+        "outcome": result.outcome,
+        "run": {
+            "id": run_id,
+            "timestamp_utc": timestamp,
+            "duration_ms": duration_ms,
+            "interpreter": result.interpreter,
+        },
+        "errors": errors,
+        "coverage": {
+            "supported": ["command_duration"],
+            "unavailable": ["import_attribution", "saved_baseline"],
+            "incomplete": [] if result.ok else ["execution_failure"],
+        },
+        "result": {
+            "entry_command": result.entry_command,
+            "interpreter": result.interpreter,
+            "runs": result.runs,
+            "total_ms": result.total_ms,
+            "budget": result.budget,
+            "samples": result.samples,
+            "ok": result.ok,
+        },
+        # Backward-compatible flat fields.
         "entry_command": result.entry_command,
         "interpreter": result.interpreter,
-        "mode": "eager",
+        "mode": "command",
         "runs": result.runs,
         "total_ms": result.total_ms,
         "budget": result.budget,
         "ok": result.ok,
-        "errors": [
-            {"sample": e.sample, "phase": e.phase, "kind": e.kind, "detail": e.detail}
-            for e in result.errors
-        ],
         "baseline_comparison": None,
-        "per_module_top": [
-            {
-                "module": m.module,
-                "cumulative_ms": round(m.cumulative_us / 1000.0, 1),
-                "self_ms": round(m.self_us / 1000.0, 1),
-            }
-            for m in result.per_module_top
-        ],
+        "per_module_top": [],
     }
+    if not result.ok:
+        report["errors"] = errors
+    return report

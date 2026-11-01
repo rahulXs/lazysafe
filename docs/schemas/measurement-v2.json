@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "lazysafe measurement report v2",
+  "type": "object",
+  "required": ["schema_version", "kind", "tool", "outcome", "run", "errors", "coverage", "result"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "kind": { "const": "measurement" },
+    "tool": { "type": "object", "required": ["name", "version"] },
+    "outcome": { "enum": ["completed", "negative", "error"] },
+    "run": { "type": "object" },
+    "errors": { "type": "array" },
+    "coverage": { "type": "object" },
+    "result": { "type": ["object", "null"] }
+  },
+  "additionalProperties": true
+}

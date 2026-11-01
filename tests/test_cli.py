@@ -26,7 +26,7 @@ def test_analyze_command(capsys):
 
 
 def test_disabled_commands_are_unavailable(capsys):
-    for command in ("measure", "verify", "probe", "apply"):
+    for command in ("verify", "probe", "apply"):
         with pytest.raises(SystemExit) as exc_info:
             main([command, "--help"] if False else [command])
         assert exc_info.value.code == 2

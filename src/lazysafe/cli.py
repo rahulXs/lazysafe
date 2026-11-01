@@ -11,7 +11,7 @@ from lazysafe._version import __version__
 from lazysafe.apply.plan import plan_keyword
 from lazysafe.config import load_config
 from lazysafe.discovery import scan_directory
-from lazysafe.measure import BUDGET_UNAVAILABLE, measure, result_to_dict
+from lazysafe.measure import measure, result_to_dict
 from lazysafe.probe import probe
 from lazysafe.report import write_analysis_report
 from lazysafe.static import run_static
@@ -256,15 +256,15 @@ def _print_skipped(skipped):
 def _cmd_measure(args):
     config = _load_config(Path.cwd(), getattr(args, "json", False))
     budget = args.budget if args.budget is not None else config.budget_ms
-    if budget is not None:
-        print(f"  error: {BUDGET_UNAVAILABLE}\n", file=sys.stderr)
-        sys.exit(2)
+    timeout = args.timeout if getattr(args, "timeout", None) is not None else config.timeout_seconds
 
     try:
         result = measure(
             _literal_command(args.command_argv),
             runs=args.runs if args.runs is not None else config.measure_runs,
             warmup=args.warmup if args.warmup is not None else config.measure_warmup,
+            budget_ms=budget,
+            timeout=timeout,
         )
     except ValueError as exc:
         print(f"  error: {exc}\n", file=sys.stderr)
@@ -274,17 +274,17 @@ def _cmd_measure(args):
 
     if not result.ok:
         if args.json:
-            print(json.dumps(report, indent=2))
+            print(json.dumps(report, indent=2, allow_nan=False))
         failed = report["runs"]["failed"]
         kinds = sorted({e["kind"] for e in report["errors"]})
         print(
             f"  error: {failed} sample(s) failed ({', '.join(kinds)}); no timing to report.\n",
             file=sys.stderr,
         )
-        sys.exit(1)
+        sys.exit(3)
 
     if args.json:
-        print(json.dumps(report, indent=2))
+        print(json.dumps(report, indent=2, allow_nan=False))
     else:
         stats = report["total_ms"]
         print(f"\n  command: {' '.join(report['entry_command'])}")
@@ -292,20 +292,19 @@ def _cmd_measure(args):
         warmup = report["runs"]["warmup"]
         measured = report["runs"]["measured"]
         print(f"  runs:    {warmup} warmup + {measured} measured")
-        print("  metric:  import-profile data (-X importtime), not command duration\n")
-        print(f"  p50:     {stats['p50']}ms")
-        print(f"  min:     {stats['min']}ms")
-        print(f"  max:     {stats['max']}ms")
-        print(f"  stdev:   {stats['stdev']}ms")
-
-        if report["per_module_top"]:
-            print("\n  top modules:")
-            for mod in report["per_module_top"][:10]:
-                cum = mod["cumulative_ms"]
-                self_ms = mod["self_ms"]
-                print(f"    {mod['module']:40s} {cum:>8.1f}ms (self {self_ms:.1f}ms)")
+        print("  metric:  command duration\n")
+        if stats:
+            print(f"  p50:     {stats['p50']}ms")
+            print(f"  min:     {stats['min']}ms")
+            print(f"  max:     {stats['max']}ms")
+            print(f"  mad:     {stats['mad']}ms")
 
         print()
+
+        budget_status = (report.get("budget") or {}).get("status")
+        if budget_status == "failed":
+            print("  error: budget exceeded.\n", file=sys.stderr)
+            sys.exit(1)
 
 
 _EFFECT_LABELS = {
@@ -468,7 +467,7 @@ def main(argv=None):
 
     p_measure = sub.add_parser(
         "measure",
-        help="unavailable in this release: command duration returns in 0.8.0",
+        help="measure command duration for a literal command",
         epilog="example: lazysafe measure -- python -c 'import json'",
     )
     p_measure.add_argument(
@@ -478,7 +477,8 @@ def main(argv=None):
     )
     p_measure.add_argument("--runs", type=int, help="number of measured runs")
     p_measure.add_argument("--warmup", type=int, help="number of warmup runs")
-    p_measure.add_argument("--budget", type=float, help="budget gating (currently unavailable)")
+    p_measure.add_argument("--budget", type=float, help="budget in milliseconds")
+    p_measure.add_argument("--timeout", type=float, help="per-process timeout in seconds")
     p_measure.add_argument("--json", action="store_true", help="output as JSON")
 
     p_probe = sub.add_parser("probe", help="unavailable in this release: conditional feature")
@@ -518,7 +518,7 @@ def main(argv=None):
     _check_command_line(argv)
 
     command = _command_name(argv)
-    _disabled = {"measure", "verify", "probe", "apply"}
+    _disabled = {"verify", "probe", "apply"}
     if command in _disabled and "--help" not in argv and "-h" not in argv:
         from lazysafe.report import error_report
 
@@ -557,6 +557,7 @@ def main(argv=None):
 
     commands = {
         "analyze": _cmd_analyze,
+        "measure": _cmd_measure,
     }
 
     commands[args.command](args)
