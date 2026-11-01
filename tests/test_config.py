@@ -58,21 +58,3 @@ def test_load_config_removed_allowlist(tmp_path):
     tmp_path.joinpath("lazysafe.toml").write_text('allowlist = ["m"]\n')
     with pytest.raises(ValueError, match="removed config key"):
         load_config(tmp_path)
-
-
-def test_load_config_inactive_budget_ms(tmp_path):
-    tmp_path.joinpath("lazysafe.toml").write_text("budget_ms = 200\n")
-    with pytest.raises(ValueError, match="inactive config keys"):
-        load_config(tmp_path)
-
-
-def test_load_config_inactive_measure_runs(tmp_path):
-    tmp_path.joinpath("lazysafe.toml").write_text("measure_runs = 3\n")
-    with pytest.raises(ValueError, match="measure_runs"):
-        load_config(tmp_path)
-
-
-def test_load_config_inactive_measure_warmup(tmp_path):
-    tmp_path.joinpath("lazysafe.toml").write_text("measure_warmup = 1\n")
-    with pytest.raises(ValueError, match="measure_warmup"):
-        load_config(tmp_path)

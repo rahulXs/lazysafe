@@ -39,7 +39,7 @@ class ProcessOutcome:
         return self.outcome == "exited" and self.returncode == 0
 
 
-def _reader(pipe, sink, limit, truncated):
+def _reader(pipe, sink, limit, truncated, proc=None, cleanup_scope=None):
     """Read raw bytes until EOF, recording whether the limit was exceeded."""
     total = bytearray()
     over = False
@@ -52,6 +52,8 @@ def _reader(pipe, sink, limit, truncated):
                 if len(total) + len(chunk) > limit:
                     total.extend(chunk[: max(0, limit - len(total))])
                     over = True
+                    if proc is not None:
+                        _terminate(proc, cleanup_scope or "direct_child_only")
                 else:
                     total.extend(chunk)
     finally:

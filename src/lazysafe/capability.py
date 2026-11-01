@@ -23,7 +23,7 @@ NOT_CAPABLE = (
 
 
 @functools.cache
-def lazy_support(python):
+def lazy_support(python, timeout=30.0):
     """Return (ok, reason). ok is False whenever no comparison can be trusted."""
     outcome = process_runner.run(
         [python, "-X", "lazy_imports=all", "-c", _PROBE], timeout=_TIMEOUT_S

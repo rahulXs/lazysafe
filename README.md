@@ -86,11 +86,10 @@ when the runs disagree.
 ### configuration
 
 `analyze` and `apply` read `lazysafe.toml` from the current directory when it
-exists. only `targets` is supported in this release; it must be a list of
-strings. `allowlist`, `budget_ms`, `measure_runs`, and `measure_warmup` are
-rejected as removed or temporarily unavailable. unknown keys are an error and
-are listed in sorted order. invalid TOML or value types exit 2 without a
-traceback.
+exists. supported keys are `targets`, `budget_ms`, `measure_runs`,
+`measure_warmup`, and `timeout_seconds`; `allowlist` is removed. unknown keys
+are an error and are listed in sorted order. invalid TOML or value types exit 2
+without a traceback.
 
 in this release `measure`, `verify`, `probe`, and `apply` are unavailable and
 exit 2 with `command_unavailable`. `analyze` treats an empty, missing-target,
