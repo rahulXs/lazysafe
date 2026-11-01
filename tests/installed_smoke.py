@@ -19,7 +19,7 @@ def run(args, cwd=None):
 def main():
     result = run(["--version"])
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "lazysafe 0.7.0", result.stdout
+    assert result.stdout.strip() == "lazysafe 0.8.0", result.stdout
 
     result = run(["--help"])
     assert result.returncode == 0, result.stderr
@@ -41,7 +41,7 @@ def main():
         assert report["kind"] == "analysis"
         assert report["outcome"] == "completed"
 
-        for command in ("measure", "verify", "probe", "apply"):
+        for command in ("verify", "probe", "apply"):
             result = run([command], cwd=root)
             assert result.returncode == 2, (command, result.returncode, result.stderr)
             assert "command_unavailable" in result.stderr or "unavailable" in result.stderr
