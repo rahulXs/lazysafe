@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+
+- command arguments after `--` are preserved literally; a missing delimiter, empty tail, or leading `-c`/`-m` is rejected before launch
+
 ## [0.7.0] - 2026-10-31
 
 ### Changed

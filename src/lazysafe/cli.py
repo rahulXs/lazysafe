@@ -66,22 +66,23 @@ def _command_name(argv):
 
 def _check_command_line(argv):
     """Reject the old spellings before argparse reports them as unknown."""
-    command = _command_name(argv)
+    delimiter_index = argv.index("--") if "--" in argv else len(argv)
+    prefix = argv[:delimiter_index]
+
+    command = _command_name(prefix)
     if command is None:
         return
 
     for flag, hint in _MOVED_OPTIONS.get(command, {}).items():
-        if flag in argv:
+        if flag in prefix:
             print(
                 f"  error: {flag} was removed from `lazysafe {command}`.\n         {hint}\n",
                 file=sys.stderr,
             )
             sys.exit(2)
 
-    rest = argv[argv.index(command) + 1 :]
+    rest = prefix[prefix.index(command) + 1 :]
     for token in rest:
-        if token == "--":
-            break
         if token in _LEADING_FLAGS:
             print(
                 f"  error: `lazysafe {command}` needs the executable before {token}.\n"
@@ -95,10 +96,18 @@ def _literal_command(rest):
     """Strip the `--` delimiter, require an executable, and resolve it once.
 
     Resolving here means later working-directory changes cannot change which
-    program runs.
+    program runs. A missing delimiter is a usage error; a missing executable is
+    an execution error handled by the caller.
     """
-    if rest and rest[0] == "--":
-        rest = rest[1:]
+    if not rest or rest[0] != "--":
+        print(
+            "  error: no command delimiter.\n"
+            "         example: lazysafe measure -- python -c 'import json'\n",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    rest = rest[1:]
 
     if not rest:
         print(
@@ -108,8 +117,18 @@ def _literal_command(rest):
         )
         sys.exit(2)
 
+    if rest[0] in _LEADING_FLAGS:
+        print(
+            f"  error: `lazysafe measure` needs the executable before {rest[0]}.\n"
+            f"         example: lazysafe measure -- python {rest[0]} <args>\n",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     resolved = shutil.which(rest[0])
     if resolved:
+        # Keep the resolved launcher path; do not realpath it, so a venv
+        # interpreter is not replaced by its base interpreter.
         return [resolved, *rest[1:]]
 
     return list(rest)
