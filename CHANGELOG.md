@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - native lazy capability checks use bounded child execution and ignore inherited Python overrides
 
+- selected source manifests use sorted SHA-256 file identities; origin observations run in a separate child
+
 ## [0.8.0] - 2026-11-01
 
 ### Changed
