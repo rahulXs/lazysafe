@@ -5,7 +5,7 @@ and then imports eagerly anyway, so lazysafe asks the interpreter to import
 something and checks whether it really stayed unloaded.
 """
 
-import functools
+import os
 
 from lazysafe import process as process_runner
 
@@ -22,11 +22,14 @@ NOT_CAPABLE = (
 )
 
 
-@functools.cache
 def lazy_support(python, timeout=30.0):
     """Return (ok, reason). ok is False whenever no comparison can be trusted."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("PYTHON")}
     outcome = process_runner.run(
-        [python, "-X", "lazy_imports=all", "-c", _PROBE], timeout=_TIMEOUT_S
+        [python, "-X", "lazy_imports=all", "-c", _PROBE],
+        timeout=min(timeout, _TIMEOUT_S),
+        env=env,
+        capture_limit=process_runner.DEFAULT_CAPTURE_LIMIT,
     )
     if outcome.outcome == "spawn_error":
         return False, f"interpreter not found: {python}"

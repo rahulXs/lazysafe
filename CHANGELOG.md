@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+
+- native lazy capability checks use bounded child execution and ignore inherited Python overrides
+
 ## [0.8.0] - 2026-11-01
 
 ### Changed
