@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from lazysafe import process as process_runner
 from lazysafe.capability import lazy_support
 
+EXACT_POLICY = "exact"
+EXIT_CODE_POLICY = "exit-code"
+
 _TIMEOUT_S = 300
 
 
@@ -98,4 +101,23 @@ def verify(command, *, timeout=_TIMEOUT_S):
         eager=eager,
         lazy=lazy,
         diffs=diffs,
+    )
+
+
+def compare_source_trees(baseline, candidate):
+    """Compare two selected source trees by manifest."""
+    from lazysafe.source import build_manifest
+
+    return build_manifest(baseline) == build_manifest(candidate)
+
+
+def verify_trees(baseline, candidate, *, timeout=30.0, command=None):
+    """Placeholder for explicit source-tree comparison (full runner in M9.3)."""
+    equivalent = compare_source_trees(baseline, candidate)
+    return VerifyResult(
+        equivalent=equivalent,
+        eager=RunResult(None, "", ""),
+        lazy=RunResult(None, "", ""),
+        diffs=[] if equivalent else ["source trees differ"],
+        error="",
     )

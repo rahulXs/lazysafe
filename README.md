@@ -1,181 +1,113 @@
 # lazysafe
 
-safely adopt python 3.15 lazy imports.
+Safely adopt Python 3.15 lazy imports.
 
-## why it exists
+## Why it exists
 
-python 3.15 ships [PEP 810](https://peps.python.org/pep-0810/) explicit lazy
+Python 3.15 ships [PEP 810](https://peps.python.org/pep-0810/) explicit lazy
 imports. `lazy import json` defers loading until first use.
 
-the catch: laziness changes *when* import-time side effects run. some libraries
-depend on them. under lazy mode, programs break in confusing ways.
+The catch: laziness changes *when* import-time side effects run. Some libraries
+depend on them, and under lazy mode programs break in confusing ways.
 
 lazysafe answers that question empirically.
 
-## install
+## Install
 
-```
+```bash
 pip install lazysafe
 ```
 
-## quickstart
+## Quickstart
 
 ```bash
-# see which imports are safe to make lazy
+# classify imports by side-effect risk
 lazysafe analyze src/
 
-# show all modules including safe ones
+# show every module, including safe ones
 lazysafe analyze src/ --all
 
-# measure import-profile data (not command duration)
+# time a real command
 lazysafe measure --runs 3 -- python -m myapp
-
-# probe modules for runtime side effects
-# NOTE: probing imports the target in a child process running with your
-# permissions. it is not a sandbox, and results are never cached.
-lazysafe probe requests flask yaml
-
-# preview lazy import rewrites (experimental preview only; writes disabled)
-lazysafe apply src/ --dry-run
-# NOTE: `lazysafe apply` without --dry-run exits nonzero without modifying
-# files. source writes stay disabled until verified backup, transaction, and
-# recovery support is available.
-
-# compare one command eager vs lazy (experimental)
-lazysafe verify -- python -m pytest -q
 ```
 
-### literal commands
+In this release, `verify`, `probe`, and `apply` are unavailable and exit 2 with
+`command_unavailable`.
 
-`measure` and `verify` take one literal command: everything after `--` is the
-executable and its arguments, run directly with no shell and no interpreter
-added.
+### Literal commands
+
+`measure` takes one literal command: everything after `--` is the executable and
+its arguments, run directly with no shell and no interpreter added by lazysafe.
 
 ```bash
-lazysafe measure -- python -c 'import json'   # a bare `measure json` is not a module import
+lazysafe measure -- python -c 'import json'
 lazysafe measure -- ./scripts/start.sh --port 8080
-lazysafe verify  -- python -m pytest -q
 ```
 
-a path with spaces, unicode arguments, and shell metacharacters such as `*` or
-`$HOME` all reach the program unchanged. name the interpreter yourself: there is
-no `--python` for these commands. `probe` keeps its own `--python`, which selects
-the interpreter used to probe a target.
+Paths with spaces, Unicode arguments, and shell metacharacters such as `*` or
+`$HOME` reach the program unchanged. Name the interpreter yourself; there is no
+`--python` for `measure`.
 
-### what verify does and does not do
+## Configuration
 
-`verify` runs one command twice under the same interpreter, once with
-`-X lazy_imports=all`, and compares the output byte for byte.
+`analyze` and `apply` read `lazysafe.toml` from the current directory. Supported
+keys: `targets`, `budget_ms`, `measure_runs`, `measure_warmup`, and
+`timeout_seconds`. `allowlist` is removed. Unknown keys are an error. Invalid
+TOML or value types exit 2 without a traceback.
 
-it refuses to report a comparison unless:
+## What it does
 
-- the selected interpreter really defers imports. python 3.14 accepts
-  `-X lazy_imports=all` and then imports eagerly anyway, so lazysafe checks
-  observed behaviour rather than trusting the flag or the version
-- both runs exit zero. two runs that both fail the same way are a broken
-  command, not a working migration
+lazysafe scans Python source and classifies each top-level import by side-effect
+risk:
 
-output is compared exactly, with no normalization, so two runs that merely look
-similar are reported as different.
-
-this is an experiment on a whole interpreter. it does **not** check that a
-specific `lazy import` edit is safe for your code, and it cannot be used to
-authorize an automatic rewrite. it exits 2 when no comparison is possible and 1
-when the runs disagree.
-
-### configuration
-
-`analyze` and `apply` read `lazysafe.toml` from the current directory when it
-exists. supported keys are `targets`, `budget_ms`, `measure_runs`,
-`measure_warmup`, and `timeout_seconds`; `allowlist` is removed. unknown keys
-are an error and are listed in sorted order. invalid TOML or value types exit 2
-without a traceback.
-
-in this release `measure`, `verify`, `probe`, and `apply` are unavailable and
-exit 2 with `command_unavailable`. `analyze` treats an empty, missing-target,
-unreadable, parse-failed, or rule-failed scan as incomplete (exit 3); a scan
-with no findings is `unknown`, not `safe`.
-
-## what it does
-
-lazysafe scans your Python source files and classifies each **top-level** import
-by its side-effect risk:
-
-| finding | meaning | action |
-|---------|---------|--------|
-| SAFE | no side effects detected | good candidate to make lazy |
+| Finding | Meaning | Action |
+|---|---|---|
+| SAFE | no rule matched | candidate to investigate |
 | RISKY | might have side effects | investigate before lazy |
 | UNSAFE | side effect detected | keep eager |
-| UNKNOWN | can't determine statically | needs further investigation |
+| UNKNOWN | cannot determine statically | needs further investigation |
 
-### side-effect rules
+A clean scan with no findings is `unknown`, not `safe`. `SAFE` means no rule
+matched, not that a module is side-effect free.
 
-| code | what it detects | confidence |
-|------|-----------------|------------|
+### Side-effect rules
+
+| Code | Detects | Confidence |
+|---|---|---|
 | SE01 | module-level function calls | 0.6 |
-| SE02 | foreign attribute assignment (monkeypatching) | 0.9 |
-| SE03 | sys.path / sys.modules / os.environ mutation | 0.95 |
-| SE04 | atexit / signal / logging registration | 0.85-0.9 |
+| SE02 | foreign attribute assignment | 0.9 |
+| SE03 | `sys.path`, `sys.modules`, `os.environ` mutation | 0.95 |
+| SE04 | atexit, signal, or logging registration | 0.85-0.9 |
 | SE05 | module-level file I/O | 0.8 |
 | SE06 | framework registration decorators (2+) | 0.5 |
-| SE07 | importlib.import_module with computed names | 0.9 |
-| SE08 | try/except ImportError with fallback patches | 0.7 |
+| SE07 | `importlib.import_module` with computed names | 0.9 |
+| SE08 | `try/except ImportError` with fallback patches | 0.7 |
 
-### known gaps in the analyzer
+## What it does not do
 
-`SAFE` means **no rule matched**, not that a module is side-effect free. These
-forms currently produce no finding and can be reported SAFE while running code
-at import:
+- Runtime lazy-loading for older Pythons (no backport of PEP 810)
+- Patching third-party packages
+- General linting or formatting (use [ruff](https://docs.astral.sh/ruff/))
+- Modifying source files. `apply` previews only and cannot be made to write.
 
-- the result of a call assigned to a name, such as `token = atexit.register(...)`
-- calls inside a class body, which run when the class is created
-- mutations inside a module-level `if`, `try`, or loop
-- a single registration decorator (SE06 only fires on two or more)
-- a module that imports a module with side effects and inherits none of its
-  findings
+## Requirements
 
-nested and function-level imports are not collected at all. treat a SAFE result
-as a place to start reading, not as permission to rewrite automatically.
-`lazysafe apply` never writes files for exactly this reason.
+- Python >= 3.11 to run lazysafe
+- Python >= 3.15 for lazy import semantics in target programs
+- Linux, macOS, Windows
 
-## what it does not do
+### Native lazy qualification
 
-- runtime lazy-loading for older pythons (no backport of PEP 810)
-- patching third-party packages' code
-- general linting/formatting (use [ruff](https://docs.astral.sh/ruff/))
-- modify your source files. `apply` previews only, and cannot be made to write
+lazysafe never infers lazy support from a version string or a successful
+launch. CPython 3.14 accepts `-X lazy_imports=all` and then imports eagerly
+anyway, so qualification runs real behavior in a child process on the selected
+interpreter.
 
-## requirements
+## Links
 
-- python >= 3.11 (host running lazysafe)
-- target programs using lazy import semantics require python >= 3.15
-- linux, macos, windows
+- [Changelog](https://github.com/rahulxs/lazysafe/blob/main/CHANGELOG.md)
+- [Issue tracker](https://github.com/rahulxs/lazysafe/issues)
 
-### native lazy qualification
-
-lazysafe never infers lazy support from a version string or a successful launch.
-CPython 3.14 accepts `-X lazy_imports=all` and then imports eagerly anyway, so a
-clean start is not evidence that anything was deferred.
-
-qualification therefore runs real behavior in a child process on the selected
-interpreter: an explicit `lazy import` must bind the name without executing the
-module, and first use must then execute it. the CI job for python 3.15 is
-required, prints the exact interpreter build, and fails if that behavior is not
-observed rather than skipping.
-
-what this does and does not cover:
-
-- native lazy behavior is qualified on ubuntu with the 3.15 build CI selects;
-  the job does not qualify the Windows or macOS paths
-- the modes `-X lazy_imports=normal` and `-X lazy_imports=all` are exercised.
-  lazysafe does not rely on any other mode
-- the 3.11-3.14 jobs still run the rest of the suite and do not claim lazy support
-
-## links
-
-- [changelog](https://github.com/rahulxs/lazysafe/blob/main/CHANGELOG.md)
-- [issue tracker](https://github.com/rahulxs/lazysafe/issues)
-
-## license
+## License
 
 MIT

@@ -19,7 +19,7 @@ def run(args, cwd=None):
 def main():
     result = run(["--version"])
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "lazysafe 0.8.0", result.stdout
+    assert result.stdout.strip() == "lazysafe 0.9.0", result.stdout
 
     result = run(["--help"])
     assert result.returncode == 0, result.stderr
