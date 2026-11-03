@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - trial scenario file validation
 
+## [Unreleased]
+
+### Added
+
+- reproducible trial example fixture
+
 ## [0.9.0] - 2026-11-02
 
 ### Changed
