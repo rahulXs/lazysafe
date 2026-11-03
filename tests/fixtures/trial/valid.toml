@@ -1,0 +1,19 @@
+schema_version = 1
+package = "demo_cli"
+source_root = "src"
+inputs = ["fixtures/items.json"]
+runs = 15
+warmup = 2
+timeout_seconds = 30
+
+[[scenario]]
+name = "help"
+role = "startup"
+command = ["python", "-m", "demo_cli", "--help"]
+comparison = "exact"
+
+[[scenario]]
+name = "render"
+role = "first_use"
+command = ["python", "-m", "demo_cli", "render", "fixtures/items.json"]
+comparison = "exact"
