@@ -112,7 +112,7 @@ def compare_source_trees(baseline, candidate):
 
 
 def verify_trees(baseline, candidate, *, timeout=30.0, command=None):
-    """Placeholder for explicit source-tree comparison (full runner in M9.3)."""
+    """Placeholder for explicit source-tree comparison ."""
     equivalent = compare_source_trees(baseline, candidate)
     return VerifyResult(
         equivalent=equivalent,

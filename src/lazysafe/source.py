@@ -103,3 +103,25 @@ def manifest_digest(manifest):
 
     payload = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def compare_inputs(baseline_root, candidate_root, inputs):
+    """Return True only when every declared input has identical bytes."""
+    from pathlib import Path
+
+    for item in inputs:
+        left = Path(baseline_root) / item
+        right = Path(candidate_root) / item
+        if not left.is_file() or not right.is_file():
+            return False
+        if left.read_bytes() != right.read_bytes():
+            return False
+    return True
+
+
+def manifests_equal(left, right):
+    return left == right
+
+
+def no_source_change(left_manifest, right_manifest):
+    return left_manifest == right_manifest

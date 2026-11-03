@@ -147,3 +147,24 @@ def parse_trial_config(path):  # noqa: C901
         timeout_seconds=float(timeout),
         scenarios=scenarios,
     )
+
+
+def gate_behavior(config, baseline_root, candidate_root):
+    """Placeholder gate: behavior must pass before timing ."""
+    return bool(config.scenarios)
+
+
+def pair_timings(baseline_samples, candidate_samples):
+    """Pair measured durations; return None aggregates if any sample is incomplete."""
+    if not baseline_samples or not candidate_samples:
+        return None
+    if len(baseline_samples) != len(candidate_samples):
+        return None
+    return list(zip(baseline_samples, candidate_samples, strict=True))
+
+
+def serialize_evidence(evidence):
+    """Return a JSON-serializable copy of trial evidence."""
+    import json
+
+    return json.loads(json.dumps(evidence, allow_nan=False))

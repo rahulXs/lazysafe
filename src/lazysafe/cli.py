@@ -505,7 +505,7 @@ def main(argv=None):
 
     p_verify = sub.add_parser(
         "verify",
-        help="unavailable in this release: source comparison returns in 0.9.0",
+        help="unavailable in this release: source comparison is not exposed yet",
         epilog="example: lazysafe verify -- python -m pytest -q",
     )
     p_verify.add_argument(
@@ -515,10 +515,20 @@ def main(argv=None):
     )
     p_verify.add_argument("--json", action="store_true", help="output as JSON")
 
+    p_trial = sub.add_parser(
+        "trial",
+        help="unavailable in this release: trial workflow returns in 0.10.0",
+    )
+    p_trial.add_argument("--baseline")
+    p_trial.add_argument("--candidate")
+    p_trial.add_argument("--scenarios")
+    p_trial.add_argument("--report")
+    p_trial.add_argument("--json", action="store_true")
+
     _check_command_line(argv)
 
     command = _command_name(argv)
-    _disabled = {"verify", "probe", "apply"}
+    _disabled = {"verify", "probe", "apply", "trial"}
     if command in _disabled and "--help" not in argv and "-h" not in argv:
         from lazysafe.report import error_report
 
@@ -528,13 +538,9 @@ def main(argv=None):
             json_mode = "--json" in argv[:idx]
 
         unavailable_messages = {
-            "measure": (
-                "lazysafe measure is unavailable in this release; "
-                "command duration returns in 0.8.0."
-            ),
             "verify": (
                 "lazysafe verify is unavailable in this release; "
-                "source comparison returns in 0.9.0."
+                "source comparison is not exposed yet."
             ),
             "probe": (
                 "lazysafe probe is unavailable in this release; it remains a conditional feature."
